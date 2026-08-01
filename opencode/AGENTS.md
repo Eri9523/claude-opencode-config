@@ -35,6 +35,7 @@ Use this file as a short routing layer. Load a dedicated skill when a task needs
 
 - `coding-guardrails`: TDD, validation, simplicity, and surgical changes.
 - `linear-task`: Load for Linear-related work. It contains the full workflow; ask permission before any `linear_*` MCP call.
+- `pull-request-quality`: Load before creating or updating a pull request; write descriptive English titles and bodies with summarized validation.
 
 ## UI
 
