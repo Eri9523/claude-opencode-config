@@ -102,11 +102,7 @@
     },
     "logfire": {
       "type": "remote",
-      "url": "https://logfire-eu.pydantic.dev/mcp",
-      "oauth": false,
-      "headers": {
-        "Authorization": "Bearer {env:LOGFIRE_API_KEY}"
-      }
+      "url": "https://logfire-eu.pydantic.dev/mcp"
     }
   },
 
