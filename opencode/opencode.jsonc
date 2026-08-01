@@ -1,0 +1,126 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  "model": "opencode-go/gpt-5.6-luna",
+  "autoupdate": true,
+
+  "provider": {
+    "anthropic": {
+      "options": {
+        "timeout": 600000,
+        "chunkTimeout": 120000
+      }
+    },
+    "openai": {
+      "options": {
+        "headerTimeout": 120000,
+        "timeout": 600000,
+        "chunkTimeout": 120000
+      }
+    },
+    "ollama": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Ollama (local)",
+      "options": {
+        "baseURL": "http://localhost:11434/v1"
+      },
+      "models": {
+        "qwen3.5:9b-q4_K_M": {
+          "name": "Qwen 3.5 9B Q4_K_M"
+        }
+      }
+    }
+  },
+
+  "formatter": {
+    "biome": {
+      "command": ["npx", "biome", "format", "--write", "$FILE"],
+      "extensions": [".js", ".jsx", ".ts", ".tsx", ".json", ".jsonc"]
+    }
+  },
+
+  "skills": {
+    "paths": ["skills"]
+  },
+
+  "permission": {
+    "read": {
+      ".env": "ask",
+      ".env.*": "ask",
+      ".env-*": "ask"
+    },
+    "external_directory": "allow",
+    "bash": {
+      "git push": "deny",
+      "git push *": "deny",
+      "sudo *": "deny",
+      "rm -rf /": "deny",
+      "rm -rf /*": "deny",
+      "rm -rf ~": "deny",
+      "rm -rf ~/*": "deny",
+      ":(){:|:&};:": "deny"
+    }
+  },
+
+  "mcp": {
+    "next-devtools": {
+      "type": "local",
+      "command": ["npx", "-y", "next-devtools-mcp@latest"]
+    },
+    "chrome-devtools": {
+      "type": "local",
+      "command": ["npx", "-y", "chrome-devtools-mcp@latest"]
+    },
+    "context7": {
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp"
+    },
+    "codegraph": {
+      "type": "local",
+      "command": ["codegraph", "serve", "--mcp"]
+    },
+    "playwright": {
+      "type": "local",
+      "command": ["npx", "-y", "@playwright/mcp@latest"]
+    },
+    "supabase": {
+      "type": "remote",
+      "url": "https://mcp.supabase.com/mcp?read_only=true",
+      "oauth": {}
+    },
+    "elevenlabs": {
+      "type": "local",
+      "command": ["uvx", "elevenlabs-mcp"],
+      "environment": {
+        "ELEVENLABS_API_KEY": "{env:OPENCODE_ELEVENLABS_API_KEY}",
+        "ELEVENLABS_API_RESIDENCY": "eu-residency"
+      }
+    },
+    "linear": {
+      "type": "remote",
+      "url": "https://mcp.linear.app/mcp"
+    },
+    "logfire": {
+      "type": "remote",
+      "url": "https://logfire-eu.pydantic.dev/mcp",
+      "oauth": false,
+      "headers": {
+        "Authorization": "Bearer {env:LOGFIRE_API_KEY}"
+      }
+    }
+  },
+
+  "agent": {
+    "build": {
+      "model": "opencode-go/gpt-5.6-luna",
+      "variant": "high"
+    },
+    "plan": {
+      "model": "opencode-go/gpt-5.6-luna"
+    }
+  },
+
+  "experimental": {
+    "mcp_timeout": 180000
+  }
+}
