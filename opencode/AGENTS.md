@@ -34,6 +34,7 @@ Use this file as a short routing layer. Load a dedicated skill when a task needs
 ## Skills
 
 - `coding-guardrails`: TDD, validation, simplicity, and surgical changes.
+- `local-browser-testing`: Test local web apps through Playwright MCP; use for localhost UI verification, auth handoff, and responsive checks.
 - `linear-task`: Load for Linear-related work. It contains the full workflow; ask permission before any `linear_*` MCP call.
 - `pull-request-quality`: Load before creating or updating a pull request; write descriptive English titles and bodies with summarized validation.
 

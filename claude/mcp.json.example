@@ -10,6 +10,7 @@
       "args": ["-y", "next-devtools-mcp@latest"]
     },
     "playwright": {
+      "type": "stdio",
       "command": "npx",
       "args": ["-y", "@playwright/mcp@latest"]
     },

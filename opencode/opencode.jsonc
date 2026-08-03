@@ -77,6 +77,7 @@
     },
     "playwright": {
       "type": "local",
+      "enabled": true,
       "command": ["npx", "-y", "@playwright/mcp@latest"]
     },
     "supabase": {
