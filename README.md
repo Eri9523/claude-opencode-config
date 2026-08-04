@@ -15,6 +15,7 @@ OpenCode reads these variables from the environment:
 
 ```sh
 export OPENCODE_ELEVENLABS_API_KEY="..."
+export OPENCODE_AIRTABLE_API_KEY="..."
 export LOGFIRE_API_KEY="..."
 ```
 

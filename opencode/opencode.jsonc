@@ -100,6 +100,13 @@
     "logfire": {
       "type": "remote",
       "url": "https://logfire-eu.pydantic.dev/mcp"
+    },
+    "airtable": {
+      "type": "local",
+      "command": ["npx", "-y", "airtable-mcp-server"],
+      "environment": {
+        "AIRTABLE_API_KEY": "{env:OPENCODE_AIRTABLE_API_KEY}"
+      }
     }
   },
 
