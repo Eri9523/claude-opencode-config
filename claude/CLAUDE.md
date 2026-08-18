@@ -25,6 +25,8 @@ Use this file as a short routing layer. Load a dedicated skill or project spec w
 
 - `coding-guardrails`: TDD, validation, simplicity, and surgical changes.
 - `local-browser-testing`: Test local web apps through Playwright MCP; use for localhost UI verification, auth handoff, and responsive checks.
+- `tailwind-frontend`: Use Tailwind as the default styling system for frontend work in any technology, including Django templates and React.
+- `converting-css-to-tailwind`: Load when migrating existing CSS selectors and stylesheets to Tailwind utilities.
 - `linear-task`: Load for Linear-related work. It contains the full workflow; ask permission before any `linear_*` MCP call.
 - `pull-request-quality`: Load before creating or updating a pull request; write descriptive English titles and bodies with summarized validation.
 
