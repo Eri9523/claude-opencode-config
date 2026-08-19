@@ -2,7 +2,7 @@ import { spawn } from "node:child_process"
 import { mkdtemp, mkdir, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { createDesignProposals, getDesignDocument, startDesignServer, type DesignProposalInput } from "../plugins/design-server.ts"
+import { approveDesignPage, createDesignProposals, getDesignDocument, startDesignServer, validateDesignDocument, type DesignProposalInput } from "../plugins/design-server.ts"
 
 type Variant = {
   name: string
@@ -318,6 +318,46 @@ async function run() {
 
   await expectOk("a full round can still be submitted in one call", round(), true)
 
+  // Approval must survive the agent appending the rest of an incomplete round.
+  try {
+    const [a, b, c] = round()
+    await createDesignProposals(worktree, brief, [a], false, true)
+    await createDesignProposals(worktree, brief, [b], true, true)
+    const approvedFirst = await approveDesignPage(worktree, a.name)
+    if (approvedFirst.document.approvedPageId === approvedFirst.page.id) pass("a proposal can be approved by name without touching the canvas")
+    else fail("a proposal can be approved by name without touching the canvas", "approvedPageId was not set")
+    const completed = await createDesignProposals(worktree, brief, [c], true, true)
+    if (completed.approvedPageId === approvedFirst.page.id) pass("approval survives appending the rest of the round")
+    else fail("approval survives appending the rest of the round", `approvedPageId became ${JSON.stringify(completed.approvedPageId)}`)
+    const byNumber = await approveDesignPage(worktree, "2")
+    if (byNumber.page.id === completed.pages[1].id) pass("a proposal can be approved by its position in the round")
+    else fail("a proposal can be approved by its position in the round", `matched ${byNumber.page.name}`)
+    const fresh = await createDesignProposals(worktree, brief, round(), false, true)
+    if (fresh.approvedPageId === null) pass("starting a new round clears the stale approval")
+    else fail("starting a new round clears the stale approval", `approvedPageId stayed ${JSON.stringify(fresh.approvedPageId)}`)
+  } catch (error) {
+    fail("approval survives appending the rest of the round", (error as Error).message)
+  }
+
+  try {
+    await approveDesignPage(worktree, "no existe semejante propuesta")
+    fail("approving an unknown proposal is rejected", "was accepted")
+  } catch (error) {
+    if ((error as Error).message.includes("No single proposal matches")) pass("approving an unknown proposal is rejected")
+    else fail("approving an unknown proposal is rejected", (error as Error).message)
+  }
+
+  try {
+    await createDesignProposals(worktree, brief, [round()[0]], false, true)
+    await validateDesignDocument(worktree, await getDesignDocument(worktree))
+    fail("an incomplete round explains what is missing", "was accepted")
+  } catch (error) {
+    const message = (error as Error).message
+    if (message.includes("1 of 3 proposals") && message.includes("append: true")) pass("an incomplete round explains what is missing")
+    else fail("an incomplete round explains what is missing", message)
+  }
+
+  await expectOk("a final complete round is accepted", round(), true)
   const document = await getDesignDocument(worktree)
   const server = await startDesignServer(worktree, brief)
   const page = document.pages[0]

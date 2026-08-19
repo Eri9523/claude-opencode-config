@@ -698,15 +698,50 @@ export async function createDesignProposals(
   assertDistinctDirections(nextPages)
   document.pages = nextPages
   document.activePageId = document.pages[0].id
-  document.approvedPageId = null
+  // Appending the rest of a round must not discard an approval the user already made.
+  const approvedSurvives = document.approvedPageId !== null && nextPages.some((page) => page.id === document.approvedPageId)
+  document.approvedPageId = approvedSurvives ? document.approvedPageId : null
   document.brief = brief || document.brief
   document.history = history
   await writeDocument(documentPath, document)
   return readDocument(documentPath)
 }
 
+// The user should be able to just say which direction they prefer, so approval
+// is available from the agent side instead of only through the canvas button.
+export async function approveDesignPage(worktree: string, selector: string): Promise<{ document: DesignDocument; page: DesignPage }> {
+  const documentPath = join(worktree, ".opencode", "designs", "design.json")
+  await ensureDocument(documentPath, "")
+  const document = await readDocument(documentPath)
+  const wanted = selector.trim().toLowerCase()
+  if (!wanted) throw new Error("Name the proposal to approve, by name, number, or id")
+  const position = Number.parseInt(wanted, 10)
+  const partial = document.pages.filter((page) => page.name.trim().toLowerCase().includes(wanted))
+  const page =
+    document.pages.find((entry) => entry.id.toLowerCase() === wanted) ??
+    document.pages.find((entry) => entry.name.trim().toLowerCase() === wanted) ??
+    (String(position) === wanted && position >= 1 && position <= document.pages.length ? document.pages[position - 1] : undefined) ??
+    (partial.length === 1 ? partial[0] : undefined)
+  if (!page) {
+    const available = document.pages.map((entry, index) => `${index + 1}. ${entry.name}`).join(", ")
+    throw new Error(`No single proposal matches "${selector}". Available: ${available || "none"}`)
+  }
+  document.approvedPageId = page.id
+  document.activePageId = page.id
+  await writeDocument(documentPath, document)
+  return { document: await readDocument(documentPath), page }
+}
+
 export async function validateDesignDocument(worktree: string, document: DesignDocument): Promise<void> {
-  if (document.pages.length !== 3) throw new Error("Exactly 3 design proposals are required")
+  if (document.pages.length !== maxRoundSize) {
+    const missing = maxRoundSize - document.pages.length
+    const have = document.pages.map((page) => page.name).join(", ") || "none"
+    throw new Error(
+      missing > 0
+        ? `This round has ${document.pages.length} of ${maxRoundSize} proposals (${have}). Add the missing ${missing} with design_create_proposals and append: true before presenting.`
+        : `This round has ${document.pages.length} proposals but a round holds ${maxRoundSize}. Start a clean round with append: false.`,
+    )
+  }
   const proposals: DesignProposalInput[] = document.pages.map((page) => {
     if (!page.html || !page.css || !page.evidence || !page.plan) throw new Error(`${page.name}: complete HTML, CSS, plan, and evidence are required`)
     return {
