@@ -83,8 +83,10 @@ Also apply Chanel's test before presenting: look at each design and remove one a
 
 ## 7. Present, then implement
 
-Do not modify application code yet. Only after visual QA passes, call `design_present` to open the browser for the user. The canvas opens in `Overview` showing all 3 proposals together; the user clicks one to review it and marks one Approved. `Pages` remains available for direct navigation.
+Do not modify application code yet. Only after visual QA passes, call `design_present` to open the browser for the user. The canvas opens in `Overview` showing all 3 proposals together; `Pages` remains available for direct navigation.
+
+**The moment the user tells you which direction they prefer — by name, by number, or by describing it — call `design_approve` with it.** Never ask them to click Approve in the canvas; saying it is enough. The canvas button stays available for when they'd rather use it, but it is not a step you may require of them.
 
 On a later round, the plugin records what you already explored and rejects a direction that repeats the previous round's. Pass `refinement: true` only when the user explicitly asked to refine an existing direction rather than see new ones.
 
-When the user asks to implement the design, call `design_get`. Only implement when `approvedPageId` is set; translate the approved page into the project's actual UI stack and preserve the approved design intent. If there is no approved page, ask the user to approve one first.
+When the user asks to implement the design, call `design_get`. Only implement when `approvedPageId` is set; translate the approved page into the project's actual UI stack and preserve the approved design intent. If nothing is approved and the user has already expressed a preference in conversation, approve it with `design_approve` rather than asking them again.
