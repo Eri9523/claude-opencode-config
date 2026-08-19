@@ -731,7 +731,7 @@
     }
 
     let saveTimer;
-    function queueSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveDocument, 380); setStatus('Unsaved changes'); }
+    function queueSave() { clearTimeout(saveTimer); saveTimer = setTimeout(() => { saveTimer = undefined; saveDocument(); }, 380); setStatus('Unsaved changes'); }
 
     async function checkForExternalUpdate() {
       if (!state.document || state.saving || saveTimer) return;

@@ -1,7 +1,7 @@
 import { mkdir } from "node:fs/promises"
 import { join } from "node:path"
 import { tool, type Plugin } from "@opencode-ai/plugin"
-import { createDesignProposals, getDesignDocument, startDesignServer, validateDesignDocument } from "./design-server"
+import { approveDesignPage, createDesignProposals, getDesignDocument, startDesignServer, validateDesignDocument } from "./design-server"
 
 async function openBrowser(shell: Parameters<Plugin>[0]["$"], url: string): Promise<void> {
   try {
@@ -226,6 +226,21 @@ export const DesignCanvasPlugin: Plugin = async ({ $, worktree }) => {
             title: `Rendered ${results.length} proposal${results.length === 1 ? "" : "s"}`,
             output: `Read each of these images before judging the designs. A rendered pixel is worth a thousand tokens of self-assessment.\n${lines}${warning}`,
             metadata: { screenshots: results, failures },
+          }
+        },
+      }),
+      design_approve: tool({
+        description:
+          "Mark one proposal as the approved design. Use this as soon as the user says which direction they prefer — they should never be asked to click Approve in the canvas. Accepts the proposal name, its position in the round (1, 2, 3), or its id.",
+        args: {
+          proposal: tool.schema.string(),
+        },
+        async execute(args) {
+          const { document, page } = await approveDesignPage(worktree, args.proposal)
+          return {
+            title: `Approved: ${page.name}`,
+            output: `${page.name} is now the approved design (${page.id}). Implement from this page: translate it into the project's UI stack and preserve its design intent.`,
+            metadata: { document, approvedPage: page },
           }
         },
       }),
