@@ -12,6 +12,8 @@ First inspect the target repository and identify the actual surface requested. F
 
 Load and apply the `ui-ux-pro-max` skill to establish a product-specific visual system, and the `impeccable` skill to critique hierarchy, usability, responsive behavior, and interaction quality.
 
+`ui-ux-pro-max` matches styles and palettes against the words in the brief; it has never seen this repository. When its recommendation conflicts with the brand the code actually carries — the real logo colors, the signage, the photography, the existing tokens — **the repository wins**. Take its structural and conversion guidance, discard its palette, and say in one line what you discarded and why. A recommended palette that contradicts the real brand is a wrong answer, not a bold one.
+
 Do not call `design_open`. `design_create_proposals` creates a private draft canvas without opening the user's browser.
 
 ## 2. Plan each direction before writing any code
@@ -32,7 +34,9 @@ The plugin enforces that the three directions differ in signature, palette, and 
 
 ## 3. Build the proposals
 
-Use `design_create_proposals` to create exactly 3 proposals. Every proposal must include:
+**Submit one proposal per call.** Call `design_create_proposals` with a single proposal and `append: false` to open the round, then once more per remaining direction with `append: true`. A round holds 3. Do not put all three in one call: a finished proposal is several thousand tokens of JSON, so three at once is a payload large enough to time out, and any single failed check throws away all three. One at a time fails fast and cheap, and each proposal is still checked for differentiation against the ones already stored.
+
+Every proposal must include:
 
 - Complete semantic `html` and production-quality responsive `css` — not a placeholder, wireframe, or collection of absolute boxes. Use the real Spanish copy and assets from the repository.
 - Its own `background` as a six-digit hex. Nothing is inherited; declare the surface you designed.
