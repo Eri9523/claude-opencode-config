@@ -1,0 +1,774 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23080a09'/%3E%3Cpath d='M9 9h14M16 9v14' stroke='%23d7f36b' stroke-width='3'/%3E%3C/svg%3E" />
+  <title>Canvas de diseño de OpenCode</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #1c1b19;
+      --panel: #222220;
+      --panel-strong: #2a2927;
+      --line: rgba(250, 249, 245, .12);
+      --line-soft: rgba(250, 249, 245, .08);
+      --text: rgba(250, 249, 245, .92);
+      --muted: rgba(250, 249, 245, .64);
+      --subtle: rgba(250, 249, 245, .48);
+      --accent: #e08968;
+      --accent-hover: #e89b7e;
+      --selected: #3c392f;
+      --warning: #fef3a2;
+      --warning-ink: #4a4220;
+      --danger: #dc8290;
+      --shadow: 0 18px 44px rgba(0, 0, 0, .4), 0 3px 10px rgba(0, 0, 0, .24);
+      font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body { background: var(--bg); color: var(--text); overflow: hidden; }
+    button, input, textarea, select { font: inherit; }
+    button { color: inherit; }
+    button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .app { display: grid; grid-template-columns: minmax(0, 1fr) 0; grid-template-rows: 48px minmax(0, 1fr); height: 100vh; transition: grid-template-columns .15s ease; }
+    .app.inspector-open { grid-template-columns: minmax(0, 1fr) 320px; }
+    .topbar { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 8px; border-bottom: 1px solid var(--line); background: var(--panel); }
+    .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+    .brand-mark { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 7px; color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; }
+    .brand-title { font-size: 12px; font-weight: 500; white-space: nowrap; }
+    .brand-meta { display: none; }
+    .topbar-nav { display: flex; align-items: center; gap: 2px; }
+    .topbar .top-button { min-height: 30px; padding: 0 8px; font-size: 11px; }
+    .topbar .top-button.primary { padding: 0 10px; }
+    .topbar-nav .top-button[aria-label] { width: 30px; padding: 0; }
+    .pages-control { position: relative; }
+    .pages-menu { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; width: 220px; padding: 7px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-strong); box-shadow: var(--shadow); }
+    .menu-label { padding: 6px 8px 7px; color: var(--subtle); font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+    .page-item { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 8px; border: 0; border-radius: 5px; background: transparent; color: var(--text); cursor: pointer; font-size: 12px; text-align: left; }
+    .page-item:hover, .page-item.active { background: rgba(250, 249, 245, .13); }
+    .page-count { color: var(--muted); font-size: 10px; }
+    .top-actions { display: flex; align-items: center; gap: 8px; }
+    .status { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; }
+    .status-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--accent); }
+    .top-button, .tool-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 32px; padding: 0 9px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; transition: border-color .15s ease, color .15s ease, background .15s ease; }
+    .top-button:hover, .tool-button:hover { border-color: transparent; color: var(--text); background: rgba(250, 249, 245, .13); }
+    .top-button.primary { border-color: var(--accent); background: var(--accent); color: #1c1b19; font-weight: 600; }
+    .top-button.primary:hover { background: var(--accent-hover); color: #1c1b19; }
+    .icon { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.6; }
+
+    .layers { display: none; }
+    .inspector { display: none; grid-column: 2; min-height: 0; overflow: auto; background: var(--panel); border-left: 1px solid var(--line); padding: 16px; }
+    .app.inspector-open .inspector { display: block; }
+    .section-heading { display: flex; align-items: center; justify-content: space-between; margin: 0 6px 13px; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
+    .section-heading button { border: 0; background: none; color: var(--subtle); cursor: pointer; }
+    .section-heading button:hover { color: var(--accent); }
+    .layer-list { display: grid; gap: 3px; }
+    .layer { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 36px; padding: 0 9px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--muted); text-align: left; cursor: pointer; transition: background .18s ease, color .18s ease, border-color .18s ease; }
+    .layer:hover { color: var(--text); background: var(--panel-strong); }
+    .layer.selected { border-color: rgba(224, 137, 104, .48); background: rgba(224, 137, 104, .08); color: var(--accent); }
+    .layer-type { display: grid; place-items: center; width: 20px; height: 20px; border: 1px solid currentColor; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 9px; }
+    .layer-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+    .layer-kind { margin-left: auto; color: var(--subtle); font-family: 'JetBrains Mono', monospace; font-size: 9px; text-transform: uppercase; }
+    .layers-footer { margin-top: 22px; padding: 13px 10px; border: 1px solid var(--line-soft); border-radius: 8px; color: var(--subtle); font-size: 11px; line-height: 1.5; }
+    .layers-footer strong { display: block; margin-bottom: 4px; color: var(--muted); font-size: 12px; }
+
+    .workspace { grid-column: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--bg); }
+    .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 7px 10px; border-bottom: 1px solid var(--line-soft); background: var(--panel); }
+    .tool-group { display: flex; align-items: center; gap: 5px; }
+    .tool-button { min-width: 34px; padding: 0 8px; font-size: 12px; }
+    .tool-button.active { color: var(--text); background: var(--selected); }
+    .zoom { display: flex; align-items: center; gap: 7px; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+    .zoom select { border: 1px solid var(--line); border-radius: 5px; padding: 6px 7px; background: var(--panel-strong); color: var(--text); font-size: 11px; }
+    .canvas-scroll { flex: 1; min-height: 0; overflow: auto; padding: 78px; background: var(--bg); }
+    .canvas-stage { display: flex; flex-direction: column; align-items: center; min-width: max-content; min-height: 100%; }
+    .canvas-scroll.overview-mode { padding: 18px 20px 24px; }
+    .canvas-scroll.overview-mode .canvas-stage { align-items: flex-start; width: max-content; min-width: 100%; }
+    .canvas-scroll.overview-mode .artboard-chrome { width: 100% !important; }
+    .artboard-chrome { display: flex; align-items: center; justify-content: space-between; width: 980px; min-height: 28px; margin-bottom: 5px; }
+    .artboard-actions { display: flex; align-items: center; gap: 2px; }
+    .artboard { position: relative; overflow: hidden; box-shadow: var(--shadow); transform-origin: top center; background: #f4f1ea; }
+    .artboard::after { position: absolute; inset: 0; border: 1px solid rgba(255,255,255,.18); pointer-events: none; content: ''; }
+    .artboard.overview-canvas { display: flex; align-items: flex-start; gap: 24px; overflow: visible; width: auto !important; height: auto !important; padding: 0; background: transparent !important; box-shadow: none; transform: none !important; }
+    .overview-item { flex: 0 0 auto; display: grid; gap: 8px; }
+    .overview-label { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 32px; color: var(--muted); font-size: 11px; }
+    .overview-label strong { color: var(--text); font-weight: 600; }
+    .overview-meta { display: flex; align-items: center; gap: 8px; }
+    .overview-label span { color: var(--subtle); font-family: 'JetBrains Mono', monospace; font-size: 9px; }
+    .overview-open { min-height: 26px; padding: 0 8px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel-strong); color: var(--muted); cursor: pointer; font-size: 10px; }
+    .overview-open:hover { border-color: var(--accent); color: var(--text); }
+    .overview-frame { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: 9px; background: #f4f1ea; box-shadow: var(--shadow); }
+    .overview-frame:hover { border-color: var(--accent); }
+    .overview-preview { position: absolute; top: 0; left: 0; transform-origin: top left; }
+    .proposal-frame { display: block; width: 100%; height: 100%; border: 0; background: #fff; }
+    .overview-preview .proposal-frame { pointer-events: auto; }
+    .overview-preview .node { cursor: pointer; }
+    .overview-canvas::after { display: none; }
+    .node { position: absolute; display: flex; align-items: center; justify-content: flex-start; overflow: hidden; padding: 10px; white-space: pre-line; cursor: grab; user-select: none; transition: box-shadow .14s ease, outline-color .14s ease; }
+    .node:active { cursor: grabbing; }
+    .node.selected { outline: 2px solid #4d6aee; outline-offset: 3px; box-shadow: 0 0 0 5px rgba(77,106,238,.16); }
+    .node[data-kind="text"] { align-items: flex-start; padding: 0; }
+    .node[data-kind="heading"] { align-items: flex-start; }
+    .node[data-kind="button"] { justify-content: center; }
+    .node[data-kind="badge"] { justify-content: center; padding: 5px 9px; }
+    .node[data-kind="card"] { align-items: flex-start; padding: 24px; }
+    .node[data-kind="image"] { padding: 0; }
+    .node[data-kind="input"] { align-items: center; }
+    .node-text { overflow: hidden; width: 100%; line-height: 1.18; }
+    .node-text[contenteditable="true"] { min-height: 1em; outline: 1px solid rgba(90, 155, 236, .7); outline-offset: 3px; cursor: text; user-select: text; }
+    .selection-popover { position: absolute; z-index: 10; display: flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-strong); box-shadow: var(--shadow); transform: translateY(-100%); }
+    .selection-popover button { min-height: 30px; padding: 0 9px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); cursor: pointer; font-size: 11px; font-weight: 500; white-space: nowrap; }
+    .selection-popover button:hover { background: rgba(250, 249, 245, .13); color: var(--text); }
+    .selection-popover button.primary { background: var(--accent); color: #1c1b19; font-weight: 600; }
+    .selection-popover button.primary:hover { background: var(--accent-hover); color: #1c1b19; }
+    .formatting-popover { gap: 3px; }
+    .format-size { display: inline-flex; align-items: center; gap: 5px; padding: 0 5px; color: var(--muted); font-size: 10px; white-space: nowrap; }
+    .format-size select { width: 54px; min-height: 29px; border: 1px solid var(--line); border-radius: 5px; padding: 0 4px; background: var(--panel); color: var(--text); font-size: 11px; }
+    .format-button { min-width: 30px; padding: 0 8px !important; font-size: 13px !important; }
+    .format-button.active { background: var(--selected) !important; color: var(--text) !important; }
+    .guides-layer { position: absolute; z-index: 8; inset: 0; pointer-events: none; }
+    .alignment-guide { position: absolute; background: #5a9bec; opacity: .9; }
+    .alignment-guide.vertical { width: 1px; border-left: 1px dashed #5a9bec; background: transparent; }
+    .alignment-guide.horizontal { height: 1px; border-top: 1px dashed #5a9bec; background: transparent; }
+    .alignment-guide span { position: absolute; padding: 2px 4px; border-radius: 3px; background: #5a9bec; color: #101820; font-family: 'JetBrains Mono', monospace; font-size: 9px; line-height: 1; text-transform: uppercase; }
+    .alignment-guide.vertical span { top: 6px; left: 4px; }
+    .alignment-guide.horizontal span { top: 4px; left: 6px; }
+    .note-pin { position: absolute; z-index: 5; display: grid; place-items: center; width: 22px; height: 22px; border: 2px solid var(--bg); border-radius: 999px; background: var(--warning); color: var(--warning-ink); font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 6px rgba(0, 0, 0, .5); }
+    .note-editor { position: absolute; z-index: 12; display: grid; gap: 8px; width: 270px; padding: 10px; border: 1px solid rgba(74, 66, 32, .18); border-radius: 2px; background: var(--warning); color: var(--warning-ink); box-shadow: var(--shadow); }
+    .note-editor-input { min-height: 54px; padding: 3px; color: var(--warning-ink); font-size: 12px; line-height: 1.45; outline: 1px solid rgba(74, 66, 32, .25); outline-offset: 2px; cursor: text; user-select: text; }
+    .note-editor-done { justify-self: end; min-height: 28px; padding: 0 9px; border: 0; border-radius: 5px; background: var(--warning-ink); color: var(--warning); cursor: pointer; font-size: 11px; font-weight: 600; }
+    .empty-canvas { display: grid; place-items: center; width: 100%; height: 100%; color: #687366; font-size: 14px; }
+    .canvas-title-input { width: 360px; min-height: 28px; border: 1px solid transparent; border-radius: 5px; padding: 4px 7px; background: transparent; color: var(--subtle); font-size: 11px; }
+    .canvas-title-input:hover, .canvas-title-input:focus { border-color: var(--line); background: var(--panel-strong); color: var(--text); }
+
+    .panel-header { display: flex; align-items: center; justify-content: space-between; min-height: 32px; margin: -4px -4px 14px; padding: 0 4px 10px; border-bottom: 1px solid var(--line-soft); color: var(--text); font-size: 13px; font-weight: 600; }
+    .panel-header button { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; font-size: 18px; line-height: 1; }
+    .panel-header button:hover { background: rgba(250, 249, 245, .13); color: var(--text); }
+    .inspector-title { margin: 0 0 3px; font-size: 14px; font-weight: 600; }
+    .inspector-subtitle { margin: 0 0 18px; color: var(--muted); font-size: 11px; }
+    .inspector-section { padding: 16px 0; border-top: 1px solid var(--line-soft); }
+    .inspector-section:first-of-type { border-top: 0; padding-top: 0; }
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .field { display: grid; gap: 5px; min-width: 0; }
+    .field.full { grid-column: 1 / -1; }
+    .field label { color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+    .field input, .field textarea, .field select { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 8px 9px; background: var(--panel-strong); color: var(--text); font-size: 12px; }
+    .field textarea { min-height: 70px; resize: vertical; line-height: 1.4; }
+    .field input[type="color"] { height: 34px; padding: 3px; cursor: pointer; }
+    .field input:disabled, .field textarea:disabled, .field select:disabled { opacity: .45; cursor: not-allowed; }
+    .empty-inspector { padding: 28px 8px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); font-size: 12px; line-height: 1.5; text-align: center; }
+    .inspector-actions { display: flex; gap: 7px; }
+    .inspector-actions .top-button { flex: 1; }
+    .danger { color: var(--danger) !important; }
+    .danger:hover { border-color: var(--danger) !important; background: rgba(239,119,119,.08) !important; }
+    .notes-list { display: grid; gap: 8px; margin-top: 10px; }
+    .note { padding: 10px; border: 1px solid var(--line); border-radius: 2px; background: var(--warning); color: var(--warning-ink); box-shadow: 0 2px 6px rgba(0, 0, 0, .24); }
+    .note-target { margin-bottom: 4px; color: var(--warning-ink); font-family: 'JetBrains Mono', monospace; font-size: 9px; text-transform: uppercase; }
+    .note-copy { color: var(--warning-ink); font-size: 11px; line-height: 1.4; }
+    .note-add { display: grid; gap: 7px; padding: 10px; border: 1px solid var(--line-soft); border-radius: 7px; background: var(--panel); }
+    .note-add textarea { min-height: 58px; }
+    .note-add textarea { border-color: var(--line); background: var(--panel-strong); color: var(--text); }
+    .note-add textarea::placeholder { color: var(--muted); }
+    .hint { margin-top: 8px; color: var(--subtle); font-size: 10px; line-height: 1.45; }
+    .play-overlay { position: fixed; z-index: 100; inset: 0; display: flex; flex-direction: column; background: var(--bg); }
+    .play-overlay[hidden] { display: none; }
+    .play-toolbar { display: flex; align-items: center; justify-content: space-between; min-height: 48px; padding: 0 10px; border-bottom: 1px solid var(--line); background: var(--panel); color: var(--text); font-size: 12px; }
+    .play-stage { display: grid; place-items: center; min-height: 0; flex: 1; overflow: auto; padding: 42px; background: var(--bg); }
+    .play-stage .artboard { transform: none !important; margin: 0 !important; }
+
+    @media (max-width: 1060px) {
+      .app, .app.inspector-open { grid-template-columns: minmax(0, 1fr); grid-template-rows: 48px minmax(0, 1fr) auto; }
+      .workspace { grid-column: 1; }
+      .inspector { grid-column: 1; max-height: 330px; border-top: 1px solid var(--line); border-left: 0; }
+      body { overflow: auto; }
+      .app { min-height: 100vh; height: auto; }
+      .workspace { min-height: 720px; }
+    }
+    @media (max-width: 700px) {
+      .app, .app.inspector-open { display: block; }
+      .topbar { position: sticky; top: 0; z-index: 10; height: auto; min-height: 48px; }
+      .topbar-nav { display: none; }
+      .brand-meta, .status { display: none; }
+      .layers { display: none; }
+      .workspace { min-height: 650px; }
+      .canvas-scroll { padding: 28px 18px; }
+      .artboard-chrome { width: 980px; }
+      .inspector { max-height: none; }
+      .top-button.primary { padding: 0 9px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="topbar-nav" aria-label="Canvas history">
+        <div class="pages-control">
+          <button class="top-button" id="pages-button" type="button" aria-expanded="false" aria-controls="pages-menu">Pages</button>
+          <div class="pages-menu" id="pages-menu" hidden>
+            <div class="menu-label">Pages</div>
+            <div id="pages-list"></div>
+          </div>
+        </div>
+        <button class="top-button" id="undo-button" type="button" aria-label="Undo" title="Undo" disabled><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 4 12l5 5"/><path d="M4 12h9a7 7 0 0 1 7 7"/></svg></button>
+        <button class="top-button" id="redo-button" type="button" aria-label="Redo" title="Redo" disabled><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 7 5 5-5 5"/><path d="M20 12h-9a7 7 0 0 0-7 7"/></svg></button>
+      </div>
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">/</div>
+        <div>
+          <div class="brand-title">Design Canvas</div>
+          <div class="brand-meta">ARTEFACTO LOCAL / OPENCODE</div>
+        </div>
+      </div>
+      <div class="top-actions">
+        <div class="status" role="status" aria-live="polite"><span class="status-dot"></span><span id="save-status">Loading document</span></div>
+        <button class="top-button" id="overview-button" type="button">Overview</button>
+        <button class="top-button" id="export-button" type="button">Export JSON</button>
+        <button class="top-button" id="approve-button" type="button">Approve proposal</button>
+        <button class="top-button primary" id="save-button" type="button">Save</button>
+      </div>
+    </header>
+
+    <aside class="layers" aria-label="Layers">
+      <div class="section-heading"><span>Layers</span><button id="add-node-button" type="button" aria-label="Add layer">+</button></div>
+      <div class="layer-list" id="layer-list"></div>
+      <div class="layers-footer"><strong>Visual pass</strong>Click a layer or object to inspect it. Changes are saved to the local design document.</div>
+    </aside>
+
+    <main class="workspace">
+      <div class="toolbar" aria-label="Canvas controls">
+        <div class="tool-group">
+          <button class="tool-button active" id="select-tool" type="button" title="Select and move elements">Select</button>
+          <button class="tool-button" id="note-tool" type="button" title="Add a note to the selected element">Note</button>
+          <button class="tool-button" id="add-text-button" type="button" title="Add a text layer">Text</button>
+          <button class="tool-button" id="add-card-button" type="button" title="Add a card layer">Card</button>
+        </div>
+        <div class="zoom"><span>Zoom</span><select id="zoom-select" aria-label="Canvas zoom"><option value="0.5">50%</option><option value="0.75">75%</option><option value="1" selected>100%</option><option value="1.25">125%</option></select></div>
+      </div>
+      <div class="canvas-scroll" id="canvas-scroll">
+        <div class="canvas-stage">
+          <div class="artboard-chrome">
+            <input class="canvas-title-input" id="canvas-title-input" aria-label="Artboard title" value="Design proposal" />
+            <div class="artboard-actions">
+              <button class="tool-button" id="back-overview-button" type="button" hidden>Back to overview</button>
+              <button class="tool-button" id="play-artboard-button" type="button">Play</button>
+              <button class="tool-button" id="export-artboard-button" type="button">Export</button>
+            </div>
+          </div>
+          <div id="artboard" class="artboard" role="application" aria-label="Interactive design canvas"></div>
+        </div>
+      </div>
+    </main>
+
+    <aside class="inspector" aria-label="Properties inspector">
+      <div class="panel-header"><span>Properties</span><button id="close-inspector" type="button" aria-label="Close properties"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button></div>
+      <div id="inspector-content"></div>
+      <section class="inspector-section">
+        <div class="section-heading"><span>Notes</span><span id="note-count">0</span></div>
+        <div class="note-add">
+          <textarea id="note-input" placeholder="Leave a note for this proposal..." aria-label="New design note"></textarea>
+          <button class="top-button" id="add-note-button" type="button">Add note</button>
+        </div>
+        <div class="hint">Notes stay attached to the selected layer and can be reviewed by the agent with <code>design_get</code>.</div>
+        <div class="notes-list" id="notes-list"></div>
+      </section>
+    </aside>
+  </div>
+
+  <div class="play-overlay" id="play-overlay" hidden>
+    <div class="play-toolbar"><span id="play-title">Design proposal</span><button class="top-button" id="close-play-button" type="button">Close preview</button></div>
+    <div class="play-stage" id="play-stage"></div>
+  </div>
+
+  <script>
+    const state = { document: null, selectedId: null, editingId: null, editingNoteId: null, inspectorOpen: false, overview: false, overviewScrollLeft: 0, zoom: 1, dragging: null, guides: [], saving: false, history: [], future: [] };
+    const artboard = document.getElementById('artboard');
+    const inspector = document.getElementById('inspector-content');
+    const layerList = document.getElementById('layer-list');
+    const notesList = document.getElementById('notes-list');
+    const saveStatus = document.getElementById('save-status');
+    const canvasTitleInput = document.getElementById('canvas-title-input');
+    const undoButton = document.getElementById('undo-button');
+    const redoButton = document.getElementById('redo-button');
+    const pagesButton = document.getElementById('pages-button');
+    const pagesMenu = document.getElementById('pages-menu');
+    const pagesList = document.getElementById('pages-list');
+    const overviewButton = document.getElementById('overview-button');
+    const backOverviewButton = document.getElementById('back-overview-button');
+    const artboardChrome = document.querySelector('.artboard-chrome');
+
+    const ICONS = {
+      text: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14M12 5v14M8 19h8"/></svg>',
+      button: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="7" width="16" height="10" rx="2"/><path d="M9 12h6"/></svg>',
+      card: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 13h5"/></svg>',
+      input: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="7" width="16" height="10" rx="2"/><path d="M8 12h8"/></svg>',
+      badge: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v10H7z"/><path d="m9 12 2 2 4-4"/></svg>',
+      image: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="m5 17 4-4 3 3 2-2 5 4"/></svg>',
+    };
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[char]));
+    }
+
+    function safeColor(value, fallback) {
+      return /^(#[0-9a-f]{3,8}|transparent|[a-z]+)$/i.test(String(value)) ? value : fallback;
+    }
+
+    function assetUrl(path) {
+      return typeof path === 'string' && path ? '/api/asset?path=' + encodeURIComponent(path) : '';
+    }
+
+    function proposalDocument(page) {
+      const html = String(page.html || '').replace(/<script[\s\S]*?<\/script>/gi, '').replace(/\son\w+\s*=\s*(['"])[\s\S]*?\1/gi, '');
+      const css = String(page.css || '').replace(/<\/style/gi, '<\\/style');
+      return '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><style>*{box-sizing:border-box}html,body{margin:0;min-height:100%;overflow-x:hidden}img{display:block;max-width:100%}button,a{font:inherit}' + css + '</style></head><body>' + html + '</body></html>';
+    }
+
+    function proposalFrame(page) {
+      return '<iframe class="proposal-frame" title="' + escapeHtml(page.name) + '" sandbox srcdoc="' + escapeHtml(proposalDocument(page)) + '"></iframe>';
+    }
+
+    function number(value, fallback = 0) {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    }
+
+    function currentPage() {
+      if (!state.document) return null;
+      return state.document.pages.find((page) => page.id === state.document.activePageId) || state.document.pages[0] || null;
+    }
+
+    function hydrateDocument(documentValue) {
+      const document = documentValue;
+      ['name', 'viewport', 'background', 'nodes', 'notes'].forEach((key) => {
+        Object.defineProperty(document, key, {
+          configurable: true,
+          get: () => {
+            const page = document.pages.find((entry) => entry.id === document.activePageId) || document.pages[0];
+            return page?.[key];
+          },
+          set: (value) => {
+            const page = document.pages.find((entry) => entry.id === document.activePageId) || document.pages[0];
+            if (page) page[key] = value;
+          },
+        });
+      });
+      return document;
+    }
+
+    function renderPages() {
+      if (!state.document) return;
+      pagesList.innerHTML = state.document.pages.map((page, index) => {
+        const active = page.id === state.document.activePageId;
+        const approved = page.id === state.document.approvedPageId;
+        return '<button class="page-item' + (active ? ' active' : '') + '" data-page-id="' + escapeHtml(page.id) + '" title="' + escapeHtml(page.direction + ': ' + page.summary) + '" type="button"><span>' + escapeHtml(page.name) + '</span><span class="page-count">' + (approved ? 'Approved' : (index + 1) + ' / ' + state.document.pages.length) + '</span></button>';
+      }).join('');
+    }
+
+    function selectedNode() {
+      return currentPage()?.nodes.find((node) => node.id === state.selectedId) ?? null;
+    }
+
+    function captureHistory() {
+      if (!state.document) return;
+      const snapshot = JSON.stringify(state.document);
+      const last = state.history[state.history.length - 1];
+      if (last !== snapshot) state.history.push(snapshot);
+      state.future = [];
+      updateHistoryButtons();
+    }
+
+    function updateHistoryButtons() {
+      undoButton.disabled = state.history.length === 0;
+      redoButton.disabled = state.future.length === 0;
+    }
+
+    function setStatus(message, isError = false) {
+      saveStatus.textContent = message;
+      saveStatus.style.color = isError ? 'var(--danger)' : '';
+    }
+
+    async function loadDocument() {
+      const response = await fetch('/api/document');
+      if (!response.ok) throw new Error('Could not load design document');
+      state.document = hydrateDocument(await response.json());
+      state.overview = state.document.pages.length > 1;
+      state.selectedId = null;
+      state.history = [];
+      state.future = [];
+      render();
+      setStatus('Ready to explore');
+    }
+
+    async function saveDocument() {
+      if (!state.document || state.saving) return;
+      state.saving = true;
+      setStatus('Saving...');
+      try {
+        const response = await fetch('/api/document', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(state.document) });
+        if (!response.ok) throw new Error('Could not save document');
+      state.document = hydrateDocument(await response.json());
+        setStatus('Saved locally');
+      } catch (error) {
+        setStatus(error.message, true);
+      } finally {
+        state.saving = false;
+      }
+    }
+
+    function undo() {
+      if (!state.history.length || !state.document) return;
+      state.future.push(JSON.stringify(state.document));
+      state.document = hydrateDocument(JSON.parse(state.history.pop()));
+      if (!state.document.nodes.some((node) => node.id === state.selectedId)) state.selectedId = null;
+      render();
+      saveDocument();
+    }
+
+    function redo() {
+      if (!state.future.length || !state.document) return;
+      state.history.push(JSON.stringify(state.document));
+      state.document = hydrateDocument(JSON.parse(state.future.pop()));
+      if (!state.document.nodes.some((node) => node.id === state.selectedId)) state.selectedId = null;
+      render();
+      saveDocument();
+    }
+
+    function exportDocument() {
+      const blob = new Blob([JSON.stringify(state.document, null, 2)], { type: 'application/json' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'design.json';
+      link.click();
+      URL.revokeObjectURL(link.href);
+    }
+
+    function openPlayPreview() {
+      const preview = artboard.cloneNode(true);
+      preview.querySelectorAll('.selection-popover, .note-pin').forEach((element) => element.remove());
+      preview.querySelectorAll('.node').forEach((element) => { element.classList.remove('selected'); element.removeAttribute('tabindex'); });
+      const playStage = document.getElementById('play-stage');
+      playStage.replaceChildren(preview);
+      document.getElementById('play-overlay').hidden = false;
+      document.getElementById('close-play-button').focus();
+    }
+
+    function closePlayPreview() {
+      document.getElementById('play-overlay').hidden = true;
+    }
+
+    function renderOverview() {
+      const pages = state.document.pages;
+      const scale = 1;
+      const canvasScroll = document.getElementById('canvas-scroll');
+      const frameHeight = Math.max(520, canvasScroll.clientHeight - 86);
+      artboard.className = 'artboard overview-canvas';
+      canvasScroll.classList.add('overview-mode');
+      artboard.style.width = 'auto';
+      artboard.style.height = 'auto';
+      artboard.style.background = 'transparent';
+      artboard.style.transform = 'none';
+      artboard.style.marginBottom = '0';
+      const totalWidth = pages.reduce((width, page) => width + page.viewport.width, 0) + (pages.length - 1) * 24;
+      const centeredMargin = Math.max(0, Math.floor((canvasScroll.clientWidth - 40 - totalWidth) / 2));
+      artboard.style.marginLeft = `${centeredMargin}px`;
+      artboardChrome.style.width = `${totalWidth}px`;
+      artboardChrome.style.marginLeft = `${centeredMargin}px`;
+      artboard.innerHTML = pages.map((page, index) => {
+        const frameWidth = page.viewport.width;
+        const content = page.html ? proposalFrame(page) : page.nodes.map(renderNode).join('');
+        const preview = '<div class="overview-preview" style="width:' + page.viewport.width + 'px;height:' + frameHeight + 'px;transform:scale(' + scale + ');background:' + safeColor(page.background, '#f4f1ea') + '">' + content + '</div>';
+        return '<article class="overview-item" data-overview-page-id="' + escapeHtml(page.id) + '" style="width:' + frameWidth + 'px"><div class="overview-label"><strong>' + escapeHtml(page.name) + '</strong><div class="overview-meta"><span>' + (index + 1) + ' / ' + pages.length + '</span><button class="overview-open" data-overview-open="' + escapeHtml(page.id) + '" type="button">Open</button></div></div><div class="overview-frame" style="width:' + frameWidth + 'px;height:' + frameHeight + 'px">' + preview + '</div></article>';
+      }).join('');
+    }
+
+    function render() {
+      if (!state.document) return;
+      renderPages();
+      canvasTitleInput.disabled = state.overview;
+      overviewButton.textContent = state.overview ? 'Edit proposal' : 'Overview';
+      backOverviewButton.hidden = state.overview || state.document.pages.length < 2;
+      document.getElementById('play-title').textContent = state.overview ? 'Proposal overview' : state.document.name;
+      if (state.overview && state.document.pages.length > 1) {
+        renderOverview();
+        document.querySelector('.app').classList.remove('inspector-open');
+        layerList.innerHTML = '';
+        inspector.innerHTML = '<div class="empty-inspector">Choose a proposal in the overview to edit it.</div>';
+        notesList.innerHTML = '';
+        document.getElementById('note-count').textContent = '0';
+        updateHistoryButtons();
+        requestAnimationFrame(() => { document.getElementById('canvas-scroll').scrollLeft = state.overviewScrollLeft; });
+        return;
+      }
+      artboard.className = 'artboard';
+      document.getElementById('canvas-scroll').classList.remove('overview-mode');
+      artboard.style.marginLeft = '0';
+      artboardChrome.style.marginLeft = '0';
+      artboardChrome.style.width = state.document.viewport.width + 'px';
+      artboard.style.width = state.document.viewport.width + 'px';
+      artboard.style.height = state.document.viewport.height + 'px';
+      artboard.style.background = safeColor(state.document.background, '#f4f1ea');
+      artboard.style.transform = 'scale(' + state.zoom + ')';
+      artboard.style.marginBottom = (state.document.viewport.height * (state.zoom - 1)) + 'px';
+      if (currentPage()?.html) {
+        artboard.innerHTML = proposalFrame(currentPage());
+      } else {
+        artboard.innerHTML = state.document.nodes.map(renderNode).join('') + state.document.notes.map(renderNotePin).join('') + renderGuides() + renderSelectionPopover();
+      }
+      canvasTitleInput.value = state.document.name;
+      renderLayers();
+      renderInspector();
+      renderNotes();
+      const approved = state.document.approvedPageId === state.document.activePageId;
+      document.getElementById('approve-button').textContent = approved ? 'Approved' : 'Approve proposal';
+      document.getElementById('approve-button').classList.toggle('primary', approved);
+      updateHistoryButtons();
+    }
+
+    function renderNode(node) {
+      const selected = node.id === state.selectedId ? ' selected' : '';
+      const editing = node.id === state.editingId;
+      const text = escapeHtml(node.text);
+      const image = assetUrl(node.assetPath);
+      const css = [
+        'left:' + number(node.x) + 'px', 'top:' + number(node.y) + 'px',
+        'width:' + number(node.width, 100) + 'px', 'height:' + number(node.height, 40) + 'px',
+        'background:' + safeColor(node.fill, 'transparent'), 'color:' + safeColor(node.color, '#171a16'),
+        'border:' + number(node.borderWidth) + 'px solid ' + safeColor(node.borderColor, 'transparent'),
+        'border-radius:' + number(node.radius) + 'px', 'font-size:' + number(node.fontSize, 14) + 'px',
+        'font-weight:' + number(node.fontWeight, 400), 'font-style:' + (node.fontStyle === 'italic' ? 'italic' : 'normal'),
+        'text-decoration:' + (node.textDecoration === 'underline' ? 'underline' : 'none'),
+        'opacity:' + Math.min(1, Math.max(0, number(node.opacity, 1))),
+      ].join(';');
+      const imageCss = image ? "background-image:url('" + image + "');background-size:cover;background-position:center;" : '';
+      return '<div class="node' + selected + '" data-node-id="' + escapeHtml(node.id) + '" data-kind="' + escapeHtml(node.kind) + '" style="' + css + ';' + imageCss + '" tabindex="0" role="button" aria-label="' + escapeHtml(node.name) + '"><div class="node-text" contenteditable="' + String(editing) + '" spellcheck="true">' + text + '</div></div>';
+    }
+
+    function renderNotePin(note) {
+      const node = state.document.nodes.find((item) => item.id === note.nodeId);
+      if (!node) return '';
+      if (state.editingNoteId === note.id) {
+        const left = Math.min(number(node.x) + number(node.width) + 16, state.document.viewport.width - 278);
+        const top = Math.max(8, number(node.y));
+        return '<div class="note-editor" data-note-id="' + escapeHtml(note.id) + '" style="left:' + Math.max(8, left) + 'px;top:' + top + 'px"><div class="note-editor-input" data-note-editor contenteditable="true" spellcheck="true">' + escapeHtml(note.text) + '</div><button class="note-editor-done" data-note-action="done" type="button">Done</button></div>';
+      }
+      return '<button class="note-pin" data-note-id="' + escapeHtml(note.id) + '" data-note-node-id="' + escapeHtml(node.id) + '" style="left:' + (number(node.x) + number(node.width) - 10) + 'px;top:' + (number(node.y) - 10) + 'px" title="' + escapeHtml(note.text) + '" aria-label="Design note">' + (state.document.notes.indexOf(note) + 1) + '</button>';
+    }
+
+    function renderSelectionPopover() {
+      const node = selectedNode();
+      if (!node || state.editingNoteId) return '';
+      const left = Math.max(8, Math.min(number(node.x), state.document.viewport.width - 236));
+      const top = Math.max(44, number(node.y));
+      if (state.editingId === node.id && node.text) {
+        const boldClass = number(node.fontWeight, 400) >= 700 ? ' active' : '';
+        const italicClass = node.fontStyle === 'italic' ? ' active' : '';
+        const underlineClass = node.textDecoration === 'underline' ? ' active' : '';
+        return '<div class="selection-popover formatting-popover" data-selection-popover style="left:' + left + 'px;top:' + top + 'px" role="toolbar" aria-label="Text formatting"><button class="primary" data-selection-action="properties" type="button">Properties</button><label class="format-size">Font size<select data-format="fontSize" aria-label="Font size"><option ' + (node.fontSize === 12 ? 'selected' : '') + '>12</option><option ' + (node.fontSize === 14 ? 'selected' : '') + '>14</option><option ' + (node.fontSize === 16 ? 'selected' : '') + '>16</option><option ' + (node.fontSize === 18 ? 'selected' : '') + '>18</option><option ' + (node.fontSize === 24 ? 'selected' : '') + '>24</option><option ' + (node.fontSize === 32 ? 'selected' : '') + '>32</option><option ' + (node.fontSize === 48 ? 'selected' : '') + '>48</option><option ' + (node.fontSize === 58 ? 'selected' : '') + '>58</option></select></label><button class="format-button' + boldClass + '" data-format="bold" type="button" aria-label="Bold"><strong>B</strong></button><button class="format-button' + italicClass + '" data-format="italic" type="button" aria-label="Italic"><em>I</em></button><button class="format-button' + underlineClass + '" data-format="underline" type="button" aria-label="Underline"><u>U</u></button></div>';
+      }
+      return '<div class="selection-popover" data-selection-popover style="left:' + left + 'px;top:' + top + 'px" role="toolbar" aria-label="Selected element actions"><button class="primary" data-selection-action="properties" type="button">Properties</button><button data-selection-action="note" type="button">Add note</button><button data-selection-action="duplicate" type="button">Duplicate</button><button data-selection-action="delete" type="button">Delete</button></div>';
+    }
+
+    function renderGuides() {
+      return '<div class="guides-layer" aria-hidden="true">' + state.guides.map((guide) => '<div class="alignment-guide ' + guide.axis + '" style="' + (guide.axis === 'vertical' ? 'left:' + guide.value + 'px;top:0;height:100%;' : 'top:' + guide.value + 'px;left:0;width:100%;') + '"><span>' + escapeHtml(guide.label) + '</span></div>').join('') + '</div>';
+    }
+
+    function alignmentPosition(item, axis) {
+      const size = axis === 'x' ? item.width : item.height;
+      const limit = axis === 'x' ? state.document.viewport.width : state.document.viewport.height;
+      const candidates = [
+        { position: 0, line: 0, label: axis === 'x' ? 'left' : 'top' },
+        { position: limit - size, line: limit, label: axis === 'x' ? 'right' : 'bottom' },
+        { position: (limit - size) / 2, line: limit / 2, label: 'center' },
+      ];
+      for (const other of state.document.nodes) {
+        if (other.id === item.id) continue;
+        const start = axis === 'x' ? other.x : other.y;
+        const otherSize = axis === 'x' ? other.width : other.height;
+        candidates.push(
+          { position: start, line: start, label: axis === 'x' ? 'left' : 'top' },
+          { position: start + (otherSize - size) / 2, line: start + otherSize / 2, label: 'center' },
+          { position: start + otherSize - size, line: start + otherSize, label: axis === 'x' ? 'right' : 'bottom' },
+        );
+      }
+      const current = axis === 'x' ? item.x : item.y;
+      const best = candidates.reduce((closest, candidate) => Math.abs(candidate.position - current) < Math.abs(closest.position - current) ? candidate : closest);
+      return Math.abs(best.position - current) <= 6 ? best : null;
+    }
+
+    function applyAlignment(item) {
+      const x = alignmentPosition(item, 'x');
+      const y = alignmentPosition(item, 'y');
+      const guides = [];
+      if (x) { item.x = Math.round(x.position); guides.push({ axis: 'vertical', value: Math.round(x.line), label: x.label }); }
+      if (y) { item.y = Math.round(y.position); guides.push({ axis: 'horizontal', value: Math.round(y.line), label: y.label }); }
+      return guides;
+    }
+
+    function renderLayers() {
+      layerList.innerHTML = state.document.nodes.map((node) => '<button class="layer' + (node.id === state.selectedId ? ' selected' : '') + '" data-layer-id="' + escapeHtml(node.id) + '" type="button"><span class="layer-type">' + (ICONS[node.kind] || ICONS.text) + '</span><span class="layer-label">' + escapeHtml(node.name) + '</span><span class="layer-kind">' + escapeHtml(node.kind) + '</span></button>').join('');
+    }
+
+    function inputField(label, key, value, type = 'text', full = false) {
+      const safeValue = escapeHtml(value);
+      return '<div class="field' + (full ? ' full' : '') + '"><label for="field-' + key + '">' + label + '</label><input id="field-' + key + '" data-field="' + key + '" type="' + type + '" value="' + safeValue + '"></div>';
+    }
+
+    function renderInspector() {
+      const node = selectedNode();
+      document.querySelector('.app').classList.toggle('inspector-open', Boolean(node && state.inspectorOpen));
+      if (!node) { inspector.innerHTML = '<div class="empty-inspector">Select an element on the canvas to inspect its properties.</div>'; return; }
+      inspector.innerHTML = '<h2 class="inspector-title">' + escapeHtml(node.name) + '</h2><p class="inspector-subtitle">' + escapeHtml(node.kind) + ' layer</p>' +
+        '<section class="inspector-section"><div class="field-grid">' + inputField('Name', 'name', node.name, 'text', true) + inputField('Text', 'text', node.text, 'text', true) + '</div></section>' +
+        '<section class="inspector-section"><div class="section-heading"><span>Position & size</span></div><div class="field-grid">' + inputField('X', 'x', node.x, 'number') + inputField('Y', 'y', node.y, 'number') + inputField('Width', 'width', node.width, 'number') + inputField('Height', 'height', node.height, 'number') + '</div></section>' +
+        '<section class="inspector-section"><div class="section-heading"><span>Appearance</span></div><div class="field-grid">' + inputField('Fill', 'fill', node.fill === 'transparent' ? '#ffffff' : safeColor(node.fill, '#ffffff'), 'color') + inputField('Text', 'color', safeColor(node.color, '#171a16'), 'color') + inputField('Border', 'borderColor', node.borderColor === 'transparent' ? '#ffffff' : safeColor(node.borderColor, '#ffffff'), 'color') + inputField('Border width', 'borderWidth', node.borderWidth, 'number') + inputField('Radius', 'radius', node.radius, 'number') + inputField('Opacity', 'opacity', node.opacity, 'number') + inputField('Font size', 'fontSize', node.fontSize, 'number') + inputField('Weight', 'fontWeight', node.fontWeight, 'number') + '</div></section>' +
+        '<section class="inspector-section"><div class="inspector-actions"><button class="top-button" id="duplicate-button" type="button">Duplicate</button><button class="top-button danger" id="delete-button" type="button">Delete</button></div></section>';
+    }
+
+    function renderNotes() {
+      const notes = state.document.notes;
+      document.getElementById('note-count').textContent = String(notes.length);
+      notesList.innerHTML = notes.length ? notes.map((note, index) => { const node = state.document.nodes.find((item) => item.id === note.nodeId); return '<div class="note"><div class="note-target">' + (index + 1) + ' / ' + escapeHtml(node?.name ?? 'Canvas') + '</div><div class="note-copy">' + escapeHtml(note.text) + '</div></div>'; }).join('') : '<div class="hint">No notes yet. Select a layer and add the first one.</div>';
+    }
+
+    function commitTextEditing() {
+      if (!state.editingId) return;
+      const node = state.document.nodes.find((item) => item.id === state.editingId);
+      const editor = artboard.querySelector('[data-node-id="' + state.editingId + '"] .node-text');
+      if (node && editor) node.text = editor.innerText;
+      state.editingId = null;
+      queueSave();
+    }
+
+    function startTextEditing(nodeId) {
+      const node = state.document.nodes.find((item) => item.id === nodeId);
+      if (!node || !node.text) return;
+      if (state.editingId) commitTextEditing();
+      if (state.editingNoteId) commitNoteEditing();
+      captureHistory();
+      state.selectedId = nodeId;
+      state.editingId = nodeId;
+      state.editingNoteId = null;
+      state.inspectorOpen = false;
+      render();
+      const editor = artboard.querySelector('[data-node-id="' + nodeId + '"] .node-text');
+      if (!editor) return;
+      editor.focus();
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+
+    function startNoteEditing(noteId) {
+      const note = state.document.notes.find((item) => item.id === noteId);
+      if (!note) return;
+      if (state.editingId) commitTextEditing();
+      if (state.editingNoteId) commitNoteEditing();
+      captureHistory();
+      state.editingNoteId = noteId;
+      state.editingId = null;
+      state.selectedId = note.nodeId;
+      state.inspectorOpen = false;
+      render();
+      const editor = artboard.querySelector('[data-note-id="' + noteId + '"] [data-note-editor]');
+      if (!editor) return;
+      editor.focus();
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+
+    function commitNoteEditing() {
+      if (!state.editingNoteId) return;
+      const note = state.document.notes.find((item) => item.id === state.editingNoteId);
+      const editor = artboard.querySelector('[data-note-id="' + state.editingNoteId + '"] [data-note-editor]');
+      if (note && editor) note.text = editor.innerText;
+      state.editingNoteId = null;
+      queueSave();
+    }
+
+    function applyTextFormat(format, value) {
+      const node = selectedNode();
+      if (!node || state.editingId !== node.id || !node.text) return;
+      if (format === 'fontSize') node.fontSize = number(value, node.fontSize);
+      if (format === 'bold') node.fontWeight = number(node.fontWeight, 400) >= 700 ? 400 : 700;
+      if (format === 'italic') node.fontStyle = node.fontStyle === 'italic' ? 'normal' : 'italic';
+      if (format === 'underline') node.textDecoration = node.textDecoration === 'underline' ? 'none' : 'underline';
+      render();
+      const editor = artboard.querySelector('[data-node-id="' + node.id + '"] .node-text');
+      if (editor) editor.focus();
+      queueSave();
+    }
+
+    document.addEventListener('click', (event) => { const control = event.target.closest('#artboard [data-format]'); if (!control || control.dataset.format === 'fontSize') return; event.preventDefault(); event.stopPropagation(); applyTextFormat(control.dataset.format); }, true);
+    document.addEventListener('change', (event) => { const control = event.target.closest('#artboard [data-format="fontSize"]'); if (!control) return; event.stopPropagation(); applyTextFormat(control.dataset.format, control.value); }, true);
+
+    function updateSelected(key, value) {
+      const node = selectedNode();
+      if (!node) return;
+      captureHistory();
+      if (['x', 'y', 'width', 'height', 'radius', 'borderWidth', 'fontSize', 'fontWeight', 'opacity'].includes(key)) node[key] = number(value, node[key]);
+      else node[key] = value;
+      render();
+      queueSave();
+    }
+
+    let saveTimer;
+    function queueSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveDocument, 380); setStatus('Unsaved changes'); }
+
+    function addNode(kind) {
+      const count = state.document.nodes.length + 1;
+      captureHistory();
+      const defaults = { text: { name: 'Capa de texto', text: 'Texto nuevo', width: 220, height: 60, fill: 'transparent', color: '#171a16', radius: 0, fontSize: 24, fontWeight: 600 }, card: { name: 'Capa de tarjeta', text: 'Tarjeta nueva', width: 240, height: 140, fill: '#ffffff', color: '#171a16', radius: 14, fontSize: 18, fontWeight: 600 }, button: { name: 'Capa de botón', text: 'Botón nuevo', width: 160, height: 48, fill: '#171a16', color: '#f8f7f1', radius: 8, fontSize: 14, fontWeight: 700 }, input: { name: 'Capa de entrada', text: 'Entrada nueva', width: 220, height: 48, fill: '#ffffff', color: '#687366', radius: 8, fontSize: 14, fontWeight: 400 } }[kind] || { name: 'Capa de texto', text: 'Texto nuevo', width: 220, height: 60, fill: 'transparent', color: '#171a16', radius: 0, fontSize: 24, fontWeight: 600 };
+      const node = { id: 'node-' + Date.now(), kind, ...defaults, x: 80 + ((count * 23) % 260), y: 100 + ((count * 29) % 330), borderColor: kind === 'input' ? '#b6beb3' : defaults.fill, borderWidth: kind === 'text' ? 0 : 1, opacity: 1 };
+      state.document.nodes.push(node); state.selectedId = node.id; render(); queueSave();
+    }
+
+    function duplicateSelected() { const node = selectedNode(); if (!node) return; captureHistory(); const copy = { ...node, id: 'node-' + Date.now(), name: node.name + ' copy', x: node.x + 24, y: node.y + 24 }; state.document.nodes.push(copy); state.selectedId = copy.id; render(); queueSave(); }
+    function deleteSelected() { const node = selectedNode(); if (!node) return; captureHistory(); state.document.nodes = state.document.nodes.filter((item) => item.id !== node.id); state.document.notes = state.document.notes.filter((note) => note.nodeId !== node.id); state.selectedId = state.document.nodes[0]?.id ?? null; state.editingId = null; state.editingNoteId = null; render(); queueSave(); }
+
+    artboard.addEventListener('input', (event) => { const noteEditor = event.target.closest('[data-note-editor]'); if (noteEditor && state.editingNoteId) { const note = state.document.notes.find((item) => item.id === state.editingNoteId); if (note) note.text = noteEditor.innerText; queueSave(); return; } const editor = event.target.closest('.node-text[contenteditable="true"]'); if (!editor) return; const node = selectedNode(); if (!node || node.id !== state.editingId) return; node.text = editor.innerText; queueSave(); });
+    artboard.addEventListener('click', (event) => { if (state.overview) { const open = event.target.closest('[data-overview-open]'); if (open) { state.overviewScrollLeft = document.getElementById('canvas-scroll').scrollLeft; state.document.activePageId = open.dataset.overviewOpen; state.selectedId = null; state.overview = false; render(); } return; } const editor = event.target.closest('.node-text[contenteditable="true"], [data-note-editor]'); if (editor) return; const noteAction = event.target.closest('[data-note-action]'); if (noteAction && noteAction.dataset.noteAction === 'done') { commitNoteEditing(); render(); return; } const action = event.target.closest('[data-selection-action]'); if (action) { const actionName = action.dataset.selectionAction; if (actionName === 'properties') { state.inspectorOpen = true; render(); return; } if (actionName === 'note') { state.inspectorOpen = true; render(); document.getElementById('note-input').focus(); return; } if (actionName === 'duplicate') { duplicateSelected(); return; } if (actionName === 'delete') { deleteSelected(); return; } } const node = event.target.closest('.node'); const note = event.target.closest('.note-pin'); if (note && event.detail === 2) { event.preventDefault(); startNoteEditing(note.dataset.noteId); return; } if (node && event.detail === 2) { event.preventDefault(); startTextEditing(node.dataset.nodeId); return; } if (state.editingId) commitTextEditing(); if (state.editingNoteId) commitNoteEditing(); if (note) { state.selectedId = note.dataset.noteNodeId; state.inspectorOpen = false; render(); return; } if (node) { state.selectedId = node.dataset.nodeId; state.inspectorOpen = false; render(); return; } if (event.target === artboard) { state.selectedId = null; state.inspectorOpen = false; render(); } });
+    artboard.addEventListener('pointerdown', (event) => { if (state.overview) return; const node = event.target.closest('.node'); if (!node || event.target.closest('input,textarea,button')) return; const item = state.document.nodes.find((entry) => entry.id === node.dataset.nodeId); if (!item) return; state.guides = []; state.dragging = { id: item.id, startX: event.clientX, startY: event.clientY, x: item.x, y: item.y, moved: false, historyCaptured: false }; node.setPointerCapture(event.pointerId); });
+    artboard.addEventListener('pointermove', (event) => { if (!state.dragging) return; const item = state.document.nodes.find((entry) => entry.id === state.dragging.id); if (!item) return; if (!state.dragging.historyCaptured) { captureHistory(); state.dragging.historyCaptured = true; } item.x = Math.round(state.dragging.x + (event.clientX - state.dragging.startX) / state.zoom); item.y = Math.round(state.dragging.y + (event.clientY - state.dragging.startY) / state.zoom); state.guides = applyAlignment(item); state.dragging.moved = true; const node = artboard.querySelector('[data-node-id="' + item.id + '"]'); if (node) { node.style.left = item.x + 'px'; node.style.top = item.y + 'px'; } artboard.querySelectorAll('[data-note-node-id="' + item.id + '"]').forEach((pin) => { pin.style.left = (item.x + item.width - 10) + 'px'; pin.style.top = (item.y - 10) + 'px'; }); const popover = artboard.querySelector('[data-selection-popover]'); if (popover) { popover.style.left = Math.max(8, Math.min(item.x, state.document.viewport.width - 236)) + 'px'; popover.style.top = Math.max(44, item.y) + 'px'; } const guidesLayer = artboard.querySelector('.guides-layer'); if (guidesLayer) guidesLayer.outerHTML = renderGuides(); });
+    artboard.addEventListener('pointerup', () => { if (state.dragging) { const moved = state.dragging.moved; state.dragging = null; state.guides = []; if (moved) { render(); queueSave(); } } });
+    artboard.addEventListener('pointercancel', () => { state.dragging = null; state.guides = []; render(); });
+    layerList.addEventListener('click', (event) => { const layer = event.target.closest('[data-layer-id]'); if (layer) { state.selectedId = layer.dataset.layerId; render(); } });
+    pagesList.addEventListener('click', (event) => { const page = event.target.closest('[data-page-id]'); if (!page || !state.document || page.dataset.pageId === state.document.activePageId) return; captureHistory(); state.document.activePageId = page.dataset.pageId; state.selectedId = null; state.editingId = null; state.editingNoteId = null; state.inspectorOpen = false; state.overview = false; pagesMenu.hidden = true; pagesButton.setAttribute('aria-expanded', 'false'); render(); queueSave(); });
+    inspector.addEventListener('input', (event) => { const input = event.target.closest('[data-field]'); if (input) updateSelected(input.dataset.field, input.value); });
+    inspector.addEventListener('click', (event) => { if (event.target.closest('#duplicate-button')) duplicateSelected(); if (event.target.closest('#delete-button')) deleteSelected(); });
+    undoButton.addEventListener('click', undo);
+    redoButton.addEventListener('click', redo);
+    pagesButton.addEventListener('click', () => { const open = pagesMenu.hidden; pagesMenu.hidden = !open; pagesButton.setAttribute('aria-expanded', String(open)); });
+    overviewButton.addEventListener('click', () => { state.overview = state.document?.pages.length > 1 && !state.overview; state.selectedId = null; state.inspectorOpen = false; render(); });
+    backOverviewButton.addEventListener('click', () => { state.overview = true; state.selectedId = null; state.inspectorOpen = false; render(); });
+    document.addEventListener('click', (event) => { if (!event.target.closest('.pages-control')) { pagesMenu.hidden = true; pagesButton.setAttribute('aria-expanded', 'false'); } });
+    document.getElementById('play-artboard-button').addEventListener('click', openPlayPreview);
+    document.getElementById('export-artboard-button').addEventListener('click', exportDocument);
+    document.getElementById('close-play-button').addEventListener('click', closePlayPreview);
+    canvasTitleInput.addEventListener('focus', captureHistory);
+    canvasTitleInput.addEventListener('input', () => { state.document.name = canvasTitleInput.value; document.getElementById('play-title').textContent = state.document.name || 'Untitled design'; setStatus('Unsaved changes'); queueSave(); });
+    document.getElementById('add-node-button').addEventListener('click', () => addNode('text'));
+    document.getElementById('add-text-button').addEventListener('click', () => addNode('text'));
+    document.getElementById('add-card-button').addEventListener('click', () => addNode('card'));
+    document.getElementById('note-tool').addEventListener('click', () => { if (!state.selectedId) return; state.inspectorOpen = true; render(); document.getElementById('note-input').focus(); document.getElementById('note-input').scrollIntoView({ behavior: 'smooth', block: 'center' }); });
+    document.getElementById('close-inspector').addEventListener('click', () => { state.inspectorOpen = false; render(); });
+    document.getElementById('zoom-select').addEventListener('change', (event) => { state.zoom = number(event.target.value, 1); render(); });
+    document.getElementById('save-button').addEventListener('click', saveDocument);
+    document.getElementById('export-button').addEventListener('click', exportDocument);
+    document.getElementById('approve-button').addEventListener('click', () => { if (!state.document) return; captureHistory(); state.document.approvedPageId = state.document.activePageId; render(); queueSave(); setStatus('Proposal approved'); });
+    document.getElementById('add-note-button').addEventListener('click', () => { const input = document.getElementById('note-input'); const text = input.value.trim(); if (!text) return; captureHistory(); state.document.notes.push({ id: 'note-' + Date.now(), nodeId: state.selectedId, text }); input.value = ''; render(); queueSave(); });
+    document.addEventListener('keydown', (event) => { if ((event.key === 'Delete' || event.key === 'Backspace') && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) deleteSelected(); if (event.key === 'Escape') { if (!document.getElementById('play-overlay').hidden) closePlayPreview(); else if (state.editingId) { commitTextEditing(); render(); } else if (state.editingNoteId) { commitNoteEditing(); render(); } else { state.selectedId = null; state.inspectorOpen = false; render(); } } if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); event.shiftKey ? redo() : undo(); } });
+
+    loadDocument().catch((error) => { setStatus(error.message, true); inspector.innerHTML = '<div class="empty-inspector">The local design server could not load this canvas. Reload the page after restarting the command.</div>'; });
+  </script>
+</body>
+</html>

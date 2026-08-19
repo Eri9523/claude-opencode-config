@@ -1,0 +1,724 @@
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
+import { dirname, extname, join, resolve, sep } from "node:path"
+
+export type DesignNodeKind = "text" | "button" | "card" | "input" | "badge" | "image"
+
+export type DesignNode = {
+  id: string
+  kind: DesignNodeKind
+  name: string
+  text: string
+  x: number
+  y: number
+  width: number
+  height: number
+  fill: string
+  color: string
+  borderColor: string
+  borderWidth: number
+  radius: number
+  fontSize: number
+  fontWeight: number
+  fontStyle?: "normal" | "italic"
+  textDecoration?: "none" | "underline"
+  assetPath?: string
+  opacity: number
+}
+
+export type DesignNote = {
+  id: string
+  nodeId: string | null
+  text: string
+}
+
+export type DesignEvidence = {
+  sourceFiles: string[]
+  preservedContent: string[]
+  assetPaths: string[]
+  designDecisions: string[]
+  incumbentImprovement: string
+  iconStrategy: string
+  assetTreatments: Array<{
+    path: string
+    background: string
+    rationale: string
+  }>
+  contrastChecks: Array<{
+    foreground: string
+    background: string
+    usage: "text" | "large-text" | "icon" | "control"
+  }>
+  affordanceChecks: Array<{
+    control: string
+    signifier: string
+    feedback: string
+    targetSize: number
+  }>
+  nielsenReview: Array<{
+    heuristic: NielsenHeuristic
+    finding: string
+    implementation: string
+  }>
+}
+
+export type NielsenHeuristic =
+  | "visibility-of-system-status"
+  | "match-with-real-world"
+  | "user-control-and-freedom"
+  | "consistency-and-standards"
+  | "error-prevention"
+  | "recognition-rather-than-recall"
+  | "flexibility-and-efficiency"
+  | "aesthetic-and-minimalist-design"
+  | "help-users-recognize-recover-errors"
+  | "help-and-documentation"
+
+const nielsenHeuristics: NielsenHeuristic[] = [
+  "visibility-of-system-status",
+  "match-with-real-world",
+  "user-control-and-freedom",
+  "consistency-and-standards",
+  "error-prevention",
+  "recognition-rather-than-recall",
+  "flexibility-and-efficiency",
+  "aesthetic-and-minimalist-design",
+  "help-users-recognize-recover-errors",
+  "help-and-documentation",
+]
+
+export type DesignPage = {
+  id: string
+  name: string
+  direction: string
+  summary: string
+  viewport: {
+    width: number
+    height: number
+  }
+  background: string
+  html?: string
+  css?: string
+  evidence?: DesignEvidence
+  nodes: DesignNode[]
+  notes: DesignNote[]
+}
+
+export type DesignDocument = {
+  version: 2
+  name: string
+  brief: string
+  pages: DesignPage[]
+  activePageId: string
+  approvedPageId: string | null
+  updatedAt: string
+}
+
+export type DesignServer = {
+  url: string
+  documentPath: string
+  close: () => void
+}
+
+const runningServers = new Map<string, DesignServer>()
+
+function id(prefix: string): string {
+  return `${prefix}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function defaultPage(brief = ""): DesignPage {
+  return {
+    id: "proposal-1",
+    name: brief.trim() ? "Design proposal" : "Untitled design",
+    direction: "Editorial workspace",
+    summary: brief.trim() || "A first visual direction to refine in the canvas.",
+    viewport: { width: 980, height: 640 },
+    background: "#f4f1ea",
+    nodes: [
+      {
+        id: "eyebrow",
+        kind: "badge",
+        name: "Etiqueta",
+        text: "OPENCODE / ESTUDIO DE DISEÑO",
+        x: 72,
+        y: 74,
+        width: 220,
+        height: 30,
+        fill: "#d7f36b",
+        color: "#10140d",
+        borderColor: "#10140d",
+        borderWidth: 1,
+        radius: 999,
+        fontSize: 11,
+        fontWeight: 700,
+        opacity: 1,
+      },
+      {
+        id: "heading",
+        kind: "text",
+        name: "Título principal",
+        text: "Haz visible el primer borrador.",
+        x: 68,
+        y: 142,
+        width: 560,
+        height: 124,
+        fill: "transparent",
+        color: "#171a16",
+        borderColor: "transparent",
+        borderWidth: 0,
+        radius: 0,
+        fontSize: 58,
+        fontWeight: 700,
+        opacity: 1,
+      },
+      {
+        id: "body",
+        kind: "text",
+        name: "Texto de apoyo",
+        text: "Explora una dirección, deja notas precisas y convierte la superficie aprobada en código de producción cuando esté lista.",
+        x: 74,
+        y: 300,
+        width: 400,
+        height: 72,
+        fill: "transparent",
+        color: "#5d665d",
+        borderColor: "transparent",
+        borderWidth: 0,
+        radius: 0,
+        fontSize: 17,
+        fontWeight: 400,
+        opacity: 1,
+      },
+      {
+        id: "cta",
+        kind: "button",
+        name: "Acción principal",
+        text: "Abrir espacio de trabajo",
+        x: 74,
+        y: 422,
+        width: 190,
+        height: 56,
+        fill: "#171a16",
+        color: "#f8f7f1",
+        borderColor: "#171a16",
+        borderWidth: 1,
+        radius: 8,
+        fontSize: 14,
+        fontWeight: 700,
+        opacity: 1,
+      },
+      {
+        id: "card",
+        kind: "card",
+        name: "Tarjeta de función",
+        text: "Canvas listo para inspeccionar\nHaz clic en cualquier capa para ajustarla.",
+        x: 632,
+        y: 132,
+        width: 270,
+        height: 320,
+        fill: "#171a16",
+        color: "#f8f7f1",
+        borderColor: "#171a16",
+        borderWidth: 1,
+        radius: 18,
+        fontSize: 21,
+        fontWeight: 600,
+        opacity: 1,
+      },
+      {
+        id: "input",
+        kind: "input",
+        name: "Campo de entrada",
+        text: "Añade una nota de diseño...",
+        x: 632,
+        y: 480,
+        width: 270,
+        height: 52,
+        fill: "#fffdf8",
+        color: "#8b938a",
+        borderColor: "#b6beb3",
+        borderWidth: 1,
+        radius: 8,
+        fontSize: 13,
+        fontWeight: 400,
+        opacity: 1,
+      },
+    ],
+    notes: [
+      {
+        id: "note-1",
+        nodeId: "heading",
+        text: "Prueba una idea fuerte antes de añadir más interfaz.",
+      },
+    ],
+  }
+}
+
+export function defaultDocument(brief = ""): DesignDocument {
+  const page = defaultPage(brief)
+  return {
+    version: 2,
+    name: "Design workspace",
+    brief: brief.trim(),
+    pages: [page],
+    activePageId: page.id,
+    approvedPageId: null,
+    updatedAt: new Date().toISOString(),
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null
+}
+
+function isDesignDocument(value: unknown): value is DesignDocument {
+  if (!isRecord(value)) return false
+  return value.version === 2 && typeof value.name === "string" && Array.isArray(value.pages) && typeof value.activePageId === "string"
+}
+
+function normalizeDocument(value: unknown): DesignDocument {
+  if (isDesignDocument(value)) return value
+  if (!isRecord(value) || value.version !== 1 || !Array.isArray(value.nodes) || !Array.isArray(value.notes) || !isRecord(value.viewport)) {
+    throw new Error("Invalid design document")
+  }
+  const legacyPage = {
+    id: "proposal-1",
+    name: typeof value.name === "string" ? value.name : "Design proposal",
+    direction: "Imported design",
+    summary: typeof value.brief === "string" ? value.brief : "Imported from the previous canvas format.",
+    viewport: value.viewport,
+    background: typeof value.background === "string" ? value.background : "#f4f1ea",
+    nodes: value.nodes,
+    notes: value.notes,
+  } as DesignPage
+  return {
+    version: 2,
+    name: "Design workspace",
+    brief: typeof value.brief === "string" ? value.brief : "",
+    pages: [legacyPage],
+    activePageId: legacyPage.id,
+    approvedPageId: null,
+    updatedAt: new Date().toISOString(),
+  }
+}
+
+export type DesignProposalInput = {
+  name: string
+  direction: string
+  summary: string
+  headline?: string
+  viewport?: {
+    width: number
+    height: number
+  }
+  background?: string
+  html: string
+  css: string
+  evidence: DesignEvidence
+  nodes?: DesignNode[]
+  notes?: DesignNote[]
+}
+
+function assertWorktreePath(worktree: string, relativePath: string): string {
+  const root = resolve(worktree)
+  const target = resolve(root, relativePath)
+  if (target !== root && !target.startsWith(`${root}${sep}`)) throw new Error(`Path is outside the worktree: ${relativePath}`)
+  return target
+}
+
+function tokenSimilarity(first: string, second: string): number {
+  const tokens = (value: string) => new Set(value.toLowerCase().replace(/[^a-z0-9áéíóúñ#]+/gi, " ").split(/\s+/).filter((token) => token.length > 2))
+  const firstTokens = tokens(first)
+  const secondTokens = tokens(second)
+  const intersection = [...firstTokens].filter((token) => secondTokens.has(token)).length
+  const union = new Set([...firstTokens, ...secondTokens]).size
+  return union ? intersection / union : 1
+}
+
+function hexToRgb(value: string): [number, number, number] | null {
+  const hex = value.trim().replace(/^#/, "")
+  const normalized = hex.length === 3 ? [...hex].map((character) => `${character}${character}`).join("") : hex
+  if (!/^[0-9a-f]{6}$/i.test(normalized)) return null
+  return [Number.parseInt(normalized.slice(0, 2), 16), Number.parseInt(normalized.slice(2, 4), 16), Number.parseInt(normalized.slice(4, 6), 16)]
+}
+
+function contrastRatio(foreground: string, background: string): number | null {
+  const first = hexToRgb(foreground)
+  const second = hexToRgb(background)
+  if (!first || !second) return null
+  const luminance = (rgb: [number, number, number]) => {
+    const channels = rgb.map((channel) => {
+      const value = channel / 255
+      return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+    })
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+  }
+  const firstLuminance = luminance(first)
+  const secondLuminance = luminance(second)
+  return (Math.max(firstLuminance, secondLuminance) + 0.05) / (Math.min(firstLuminance, secondLuminance) + 0.05)
+}
+
+async function validateProposal(worktree: string, proposal: DesignProposalInput): Promise<void> {
+  const errors: string[] = []
+  if (proposal.html.length < 800) errors.push("HTML is too small to represent a finished surface")
+  if (proposal.css.length < 1200) errors.push("CSS is too small to represent a polished responsive design")
+  if (!/<(?:main|section|article|nav|header)\b/i.test(proposal.html)) errors.push("HTML lacks semantic structure")
+  if (!/<h1\b/i.test(proposal.html)) errors.push("HTML lacks a primary heading")
+  if (!/<(?:button|a)\b/i.test(proposal.html)) errors.push("HTML lacks an actionable control")
+  if (/<script\b/i.test(proposal.html)) errors.push("Scripts are not allowed in proposals")
+  if (!/@media\b/i.test(proposal.css)) errors.push("CSS lacks responsive behavior")
+  if (!/:hover\b/i.test(proposal.css)) errors.push("CSS lacks hover affordance")
+  if (!/:focus-visible\b/i.test(proposal.css)) errors.push("CSS lacks visible keyboard focus")
+  if (!/cursor\s*:\s*pointer/i.test(proposal.css)) errors.push("CSS lacks pointer affordance for interactive controls")
+  if (!/(?:transition|animation)\s*:/i.test(proposal.css)) errors.push("CSS lacks interaction feedback transitions")
+  const compactTextActions = /<(?:button|a)\b[^>]*>\s*(?:llamar|instagram|ubicaci[oó]n|c[oó]mo llegar|men[uú]|cerrar)\s*<\/(?:button|a)>/gi
+  if (compactTextActions.test(proposal.html)) errors.push("Compact utility actions must use descriptive inline SVG icons with accessible labels, not text-only controls")
+  const interactiveElements = proposal.html.matchAll(/<(button|a)\b([^>]*)>([\s\S]*?)<\/\1>/gi)
+  for (const element of interactiveElements) {
+    const attributes = element[2]
+    const content = element[3]
+    const visibleText = content.replace(/<svg[\s\S]*?<\/svg>/gi, "").replace(/<[^>]+>/g, "").trim()
+    if (/<svg\b/i.test(content) && !visibleText && !/(?:aria-label|title)\s*=/i.test(attributes)) errors.push("Every icon-only control requires an accessible name")
+  }
+  if (proposal.evidence.sourceFiles.length < 2) errors.push("Evidence must cite at least two repository source files")
+  if (proposal.evidence.preservedContent.length < 2) errors.push("Evidence must identify preserved repository content")
+  if (proposal.evidence.designDecisions.length < 3) errors.push("Evidence must explain at least three concrete design decisions")
+  if (proposal.evidence.incumbentImprovement.trim().length < 80) errors.push("Evidence must explain why this improves the incumbent design")
+  if (proposal.evidence.iconStrategy.trim().length < 40) errors.push("Evidence must explain the icon strategy")
+  for (const assetPath of proposal.evidence.assetPaths) {
+    const treatment = proposal.evidence.assetTreatments.find((item) => item.path === assetPath)
+    if (!treatment) {
+      errors.push(`Missing surface treatment for asset: ${assetPath}`)
+      continue
+    }
+    if (!hexToRgb(treatment.background)) errors.push(`Asset treatment background must be a hex color: ${assetPath}`)
+    if (treatment.rationale.trim().length < 40) errors.push(`Asset treatment must explain visibility and contrast: ${assetPath}`)
+    if (!proposal.css.toLowerCase().includes(treatment.background.toLowerCase())) errors.push(`Declared asset background is not used in CSS: ${assetPath}`)
+  }
+  if (proposal.evidence.contrastChecks.length < 4) errors.push("Evidence must include at least four contrast checks covering text, icons, and controls")
+  if (!proposal.evidence.contrastChecks.some((check) => check.usage === "icon" || check.usage === "control")) errors.push("Evidence must include icon or control contrast")
+  for (const check of proposal.evidence.contrastChecks) {
+    const ratio = contrastRatio(check.foreground, check.background)
+    if (ratio === null) {
+      errors.push(`Contrast colors must be six-digit hex values: ${check.foreground} on ${check.background}`)
+      continue
+    }
+    const minimum = check.usage === "text" ? 4.5 : 3
+    if (ratio < minimum) errors.push(`${check.usage} contrast ${ratio.toFixed(2)}:1 fails ${minimum}:1 for ${check.foreground} on ${check.background}`)
+  }
+  if (proposal.evidence.affordanceChecks.length < 3) errors.push("Evidence must review at least three important control affordances")
+  for (const check of proposal.evidence.affordanceChecks) {
+    if (check.control.trim().length < 3 || check.signifier.trim().length < 20 || check.feedback.trim().length < 20) errors.push("Affordance checks must identify the control, its visible signifier, and interaction feedback")
+    if (check.targetSize < 44) errors.push(`${check.control} target size ${check.targetSize}px is below 44px`)
+  }
+  const reviewedHeuristics = new Set(proposal.evidence.nielsenReview.map((review) => review.heuristic))
+  for (const heuristic of nielsenHeuristics) {
+    if (!reviewedHeuristics.has(heuristic)) errors.push(`Missing Nielsen heuristic review: ${heuristic}`)
+  }
+  if (reviewedHeuristics.size !== nielsenHeuristics.length || proposal.evidence.nielsenReview.length !== nielsenHeuristics.length) errors.push("Nielsen review must contain each of the 10 heuristics exactly once")
+  for (const review of proposal.evidence.nielsenReview) {
+    if (review.finding.trim().length < 30 || review.implementation.trim().length < 30) errors.push(`Nielsen review lacks actionable detail: ${review.heuristic}`)
+  }
+  for (const relativePath of [...proposal.evidence.sourceFiles, ...proposal.evidence.assetPaths]) {
+    try {
+      await readFile(assertWorktreePath(worktree, relativePath))
+    } catch {
+      errors.push(`Evidence path does not exist: ${relativePath}`)
+    }
+  }
+  for (const assetPath of proposal.evidence.assetPaths) {
+    const encodedPath = encodeURIComponent(assetPath)
+    if (!proposal.html.includes(assetPath) && !proposal.html.includes(encodedPath)) errors.push(`Declared asset is not used in HTML: ${assetPath}`)
+  }
+  if (errors.length) throw new Error(`${proposal.name}: ${errors.join("; ")}`)
+}
+
+function containsNode(outer: DesignNode, inner: DesignNode): boolean {
+  return inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.width <= outer.x + outer.width && inner.y + inner.height <= outer.y + outer.height
+}
+
+function overlapsNode(first: DesignNode, second: DesignNode): boolean {
+  return first.x < second.x + second.width && first.x + first.width > second.x && first.y < second.y + second.height && first.y + first.height > second.y
+}
+
+function textHeight(node: DesignNode): number {
+  if (!node.text || node.kind === "image") return node.height
+  const charactersPerLine = Math.max(8, Math.floor(node.width / (node.fontSize * 0.65)))
+  const lineCount = node.text.split("\n").reduce((count, line) => count + Math.max(1, Math.ceil(line.length / charactersPerLine)), 0)
+  const padding = node.kind === "card" ? 48 : node.kind === "button" ? 20 : node.kind === "badge" ? 10 : 0
+  return Math.ceil(lineCount * node.fontSize * 1.18 + padding)
+}
+
+function normalizeProposalNodes(nodes: DesignNode[]): DesignNode[] {
+  const containerIds = new Set(nodes.filter((node) => node.kind === "card" && nodes.some((other) => other.id !== node.id && containsNode(node, other))).map((node) => node.id))
+  const flattenedNodes = nodes.filter((node) => !containerIds.has(node.id)).map((node) => ({ ...node, height: Math.max(node.height, textHeight(node)) }))
+  const orderedNodes = [...flattenedNodes].sort((first, second) => first.y - second.y)
+  for (let firstIndex = 0; firstIndex < orderedNodes.length; firstIndex += 1) {
+    for (let secondIndex = firstIndex + 1; secondIndex < orderedNodes.length; secondIndex += 1) {
+      const first = orderedNodes[firstIndex]
+      const second = orderedNodes[secondIndex]
+      const horizontalOverlap = first.x < second.x + second.width && first.x + first.width > second.x
+      if (horizontalOverlap && second.y < first.y + first.height + 12) second.y = first.y + first.height + 12
+    }
+  }
+  for (let firstIndex = 0; firstIndex < orderedNodes.length; firstIndex += 1) {
+    for (let secondIndex = firstIndex + 1; secondIndex < orderedNodes.length; secondIndex += 1) {
+      const first = orderedNodes[firstIndex]
+      const second = orderedNodes[secondIndex]
+      if (!overlapsNode(first, second)) continue
+      throw new Error(`Proposal has overlapping nodes: ${first.id} and ${second.id}`)
+    }
+  }
+  return orderedNodes
+}
+
+function proposalPage(input: DesignProposalInput, brief: string): DesignPage {
+  const page = defaultPage(brief)
+  const mobileLanding = /landing|móvil|mobile/i.test(brief) && !/desktop|escritorio/i.test(brief)
+  page.id = `proposal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  page.name = input.name
+  page.direction = input.direction
+  page.summary = input.summary
+  page.background = input.background ?? page.background
+  page.html = input.html
+  page.css = input.css
+  page.evidence = input.evidence
+  page.nodes = input.nodes?.length ? normalizeProposalNodes(input.nodes) : []
+  const viewport = input.viewport ?? (mobileLanding ? { width: 390, height: 1800 } : page.viewport)
+  if (page.nodes.length) {
+    const minX = Math.min(...page.nodes.map((node) => node.x))
+    const minY = Math.min(...page.nodes.map((node) => node.y))
+    const maxX = Math.max(...page.nodes.map((node) => node.x + node.width))
+    const maxY = Math.max(...page.nodes.map((node) => node.y + node.height))
+    if (minX < 0 || minY < 0 || maxX > viewport.width) throw new Error(`Proposal has nodes outside its viewport: ${input.name}`)
+    page.viewport = { width: viewport.width, height: Math.max(viewport.height, maxY + 24) }
+  } else {
+    page.viewport = viewport
+  }
+  page.notes = input.notes ?? [{ id: `${page.id}-note`, nodeId: page.nodes[0]?.id ?? null, text: input.summary }]
+  return page
+}
+
+export async function createDesignProposals(
+  worktree: string,
+  brief: string,
+  proposals: DesignProposalInput[],
+  append = false,
+): Promise<DesignDocument> {
+  if (proposals.length !== 3) throw new Error("Exactly 3 design proposals are required")
+  if (proposals.some((proposal) => !proposal.html.trim() || !proposal.css.trim())) throw new Error("Every proposal must include complete HTML and CSS")
+  if (new Set(proposals.map((proposal) => proposal.name.trim().toLowerCase())).size !== 3) throw new Error("Proposal names must be distinct")
+  for (const proposal of proposals) await validateProposal(worktree, proposal)
+  for (let firstIndex = 0; firstIndex < proposals.length; firstIndex += 1) {
+    for (let secondIndex = firstIndex + 1; secondIndex < proposals.length; secondIndex += 1) {
+      const first = proposals[firstIndex]
+      const second = proposals[secondIndex]
+      if (first.html.trim() === second.html.trim() && first.css.trim() === second.css.trim()) throw new Error(`${first.name} and ${second.name} are identical`)
+      const firstDecisions = `${first.direction} ${first.evidence.designDecisions.join(" ")}`
+      const secondDecisions = `${second.direction} ${second.evidence.designDecisions.join(" ")}`
+      if (tokenSimilarity(firstDecisions, secondDecisions) > 0.82) throw new Error(`${first.name} and ${second.name} use indistinguishable design decisions`)
+    }
+  }
+  const mobileLanding = /landing|móvil|mobile/i.test(brief) && !/desktop|escritorio/i.test(brief)
+  if (mobileLanding && proposals.some((proposal) => (proposal.viewport?.width ?? 390) > 480)) {
+    throw new Error("Landing proposals must use a mobile viewport of 480px or less unless desktop was requested")
+  }
+  const documentPath = join(worktree, ".opencode", "designs", "design.json")
+  await ensureDocument(documentPath, brief)
+  const document = await readDocument(documentPath)
+  const pages = proposals.map((proposal) => proposalPage(proposal, brief || document.brief))
+  document.pages = append ? [...document.pages, ...pages] : pages
+  document.activePageId = document.pages[0].id
+  document.approvedPageId = null
+  document.brief = brief || document.brief
+  await writeDocument(documentPath, document)
+  return readDocument(documentPath)
+}
+
+export async function validateDesignDocument(worktree: string, document: DesignDocument): Promise<void> {
+  if (document.pages.length !== 3) throw new Error("Exactly 3 design proposals are required")
+  const proposals: DesignProposalInput[] = document.pages.map((page) => {
+    if (!page.html || !page.css || !page.evidence) throw new Error(`${page.name}: complete HTML, CSS, and evidence are required`)
+    return {
+      name: page.name,
+      direction: page.direction,
+      summary: page.summary,
+      viewport: page.viewport,
+      background: page.background,
+      html: page.html,
+      css: page.css,
+      evidence: page.evidence,
+      nodes: page.nodes,
+      notes: page.notes,
+    }
+  })
+  for (const proposal of proposals) await validateProposal(worktree, proposal)
+}
+
+async function ensureDocument(documentPath: string, brief: string): Promise<void> {
+  await mkdir(dirname(documentPath), { recursive: true })
+  try {
+    await readFile(documentPath, "utf8")
+  } catch {
+    await writeDocument(documentPath, defaultDocument(brief))
+  }
+}
+
+async function readDocument(documentPath: string): Promise<DesignDocument> {
+  const raw = await readFile(documentPath, "utf8")
+  return normalizeDocument(JSON.parse(raw))
+}
+
+async function writeDocument(documentPath: string, document: DesignDocument): Promise<void> {
+  const nextDocument = { ...document, updatedAt: new Date().toISOString() }
+  await writeFile(documentPath, `${JSON.stringify(nextDocument, null, 2)}\n`, "utf8")
+}
+
+function sendJson(response: ServerResponse, status: number, body: unknown): void {
+  const payload = JSON.stringify(body)
+  response.writeHead(status, {
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": "no-store",
+  })
+  response.end(payload)
+}
+
+function sendText(response: ServerResponse, status: number, body: string, contentType: string): void {
+  response.writeHead(status, {
+    "content-type": contentType,
+    "cache-control": "no-store",
+  })
+  response.end(body)
+}
+
+function sendBuffer(response: ServerResponse, status: number, body: Buffer, contentType: string): void {
+  response.writeHead(status, {
+    "content-type": contentType,
+    "cache-control": "no-store",
+  })
+  response.end(body)
+}
+
+function requestBody(request: IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = []
+    request.on("data", (chunk: Buffer) => chunks.push(chunk))
+    request.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")))
+    request.on("error", reject)
+  })
+}
+
+async function serveEditor(response: ServerResponse): Promise<void> {
+  const html = await readFile(new URL("./design-editor.html", import.meta.url), "utf8")
+  sendText(response, 200, html, "text/html; charset=utf-8")
+}
+
+export async function startDesignServer(worktree: string, brief = ""): Promise<DesignServer> {
+  const existing = runningServers.get(worktree)
+  if (existing) return existing
+
+  const documentPath = join(worktree, ".opencode", "designs", "design.json")
+  await ensureDocument(documentPath, brief)
+
+  const server = createServer(async (request, response) => {
+    try {
+      const url = new URL(request.url ?? "/", "http://127.0.0.1")
+
+      if (request.method === "GET" && url.pathname === "/") {
+        await serveEditor(response)
+        return
+      }
+
+      if (request.method === "GET" && url.pathname === "/api/health") {
+        sendJson(response, 200, { ok: true })
+        return
+      }
+
+      if (request.method === "GET" && url.pathname === "/api/asset") {
+        const relativePath = url.searchParams.get("path")
+        if (!relativePath) {
+          sendJson(response, 400, { error: "Missing asset path" })
+          return
+        }
+        const worktreeRoot = resolve(worktree)
+        const assetPath = resolve(worktreeRoot, relativePath)
+        if (assetPath !== worktreeRoot && !assetPath.startsWith(`${worktreeRoot}${sep}`)) {
+          sendJson(response, 403, { error: "Asset path is outside the worktree" })
+          return
+        }
+        const contentTypes: Record<string, string> = {
+          ".gif": "image/gif",
+          ".jpeg": "image/jpeg",
+          ".jpg": "image/jpeg",
+          ".png": "image/png",
+          ".svg": "image/svg+xml",
+          ".webp": "image/webp",
+        }
+        const contentType = contentTypes[extname(assetPath).toLowerCase()]
+        if (!contentType) {
+          sendJson(response, 415, { error: "Unsupported asset type" })
+          return
+        }
+        sendBuffer(response, 200, await readFile(assetPath), contentType)
+        return
+      }
+
+      if (request.method === "GET" && url.pathname === "/api/document") {
+        sendJson(response, 200, await readDocument(documentPath))
+        return
+      }
+
+      if (request.method === "PUT" && url.pathname === "/api/document") {
+        const parsed: unknown = JSON.parse(await requestBody(request))
+        if (!isDesignDocument(parsed)) {
+          sendJson(response, 400, { error: "Invalid design document" })
+          return
+        }
+        await writeDocument(documentPath, parsed)
+        sendJson(response, 200, await readDocument(documentPath))
+        return
+      }
+
+      sendJson(response, 404, { error: "Not found" })
+    } catch (error) {
+      sendJson(response, 500, { error: error instanceof Error ? error.message : "Unknown error" })
+    }
+  })
+
+  await new Promise<void>((resolve, reject) => {
+    const onError = (error: Error) => {
+      server.off("listening", onListening)
+      reject(error)
+    }
+    const onListening = () => {
+      server.off("error", onError)
+      resolve()
+    }
+    server.once("error", onError)
+    server.once("listening", onListening)
+    server.listen(0, "127.0.0.1")
+  })
+
+  const address = server.address()
+  if (!address || typeof address === "string") {
+    server.close()
+    throw new Error("Could not determine design canvas port")
+  }
+
+  const result: DesignServer = {
+    url: `http://127.0.0.1:${address.port}`,
+    documentPath,
+    close: () => {
+      runningServers.delete(worktree)
+      server.close()
+    },
+  }
+  runningServers.set(worktree, result)
+  return result
+}
+
+export async function getDesignDocument(worktree: string): Promise<DesignDocument> {
+  const documentPath = join(worktree, ".opencode", "designs", "design.json")
+  await ensureDocument(documentPath, "")
+  return readDocument(documentPath)
+}
