@@ -31,6 +31,14 @@ Use this file as a short routing layer. Load a dedicated skill when a task needs
 - Stage only files related to the commit.
 - Never push, reset, restore, checkout, stash, rebase, merge, or amend unless explicitly asked.
 
+### GitHub identities
+
+- Sergio has two GitHub profiles: `sergiorauda` for work and `Eri9523` for personal repositories.
+- Do not infer the GitHub account from the repository owner. A repository can be owned by an organization or another account while access is granted through either profile.
+- Before any `gh` repository operation or `git push`, inspect `git remote -v` and `gh auth status`, then switch explicitly with `gh auth switch --user <profile>` when needed.
+- Verify access with `gh repo view <canonical-owner>/<repo>` before pushing. GitHub may report `Repository not found` for an existing private repository when the active account lacks access.
+- Keep the canonical repository remote unchanged; never replace the owner with the authenticated username just to select credentials. Ask when the intended profile is ambiguous.
+
 ## Skills
 
 - `coding-guardrails`: TDD, validation, simplicity, and surgical changes.
