@@ -89,7 +89,7 @@
     .canvas-scroll.overview-mode .artboard-chrome { width: 100% !important; }
     .artboard-chrome { display: flex; align-items: center; justify-content: space-between; width: 980px; min-height: 28px; margin-bottom: 5px; }
     .artboard-actions { display: flex; align-items: center; gap: 2px; }
-    .artboard { position: relative; overflow: hidden; box-shadow: var(--shadow); transform-origin: top center; background: #f4f1ea; }
+    .artboard { position: relative; overflow: hidden; box-shadow: var(--shadow); transform-origin: top center; background: #ffffff; }
     .artboard::after { position: absolute; inset: 0; border: 1px solid rgba(255,255,255,.18); pointer-events: none; content: ''; }
     .artboard.overview-canvas { display: flex; align-items: flex-start; gap: 24px; overflow: visible; width: auto !important; height: auto !important; padding: 0; background: transparent !important; box-shadow: none; transform: none !important; }
     .overview-item { flex: 0 0 auto; display: grid; gap: 8px; }
@@ -99,7 +99,7 @@
     .overview-label span { color: var(--subtle); font-family: 'JetBrains Mono', monospace; font-size: 9px; }
     .overview-open { min-height: 26px; padding: 0 8px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel-strong); color: var(--muted); cursor: pointer; font-size: 10px; }
     .overview-open:hover { border-color: var(--accent); color: var(--text); }
-    .overview-frame { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: 9px; background: #f4f1ea; box-shadow: var(--shadow); }
+    .overview-frame { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: 9px; background: #ffffff; box-shadow: var(--shadow); }
     .overview-frame:hover { border-color: var(--accent); }
     .overview-preview { position: absolute; top: 0; left: 0; transform-origin: top left; }
     .proposal-frame { display: block; width: 100%; height: 100%; border: 0; background: #fff; }
@@ -322,10 +322,19 @@
       return typeof path === 'string' && path ? '/api/asset?path=' + encodeURIComponent(path) : '';
     }
 
+    const GOOGLE_FONT_SPEC = /^[A-Za-z0-9]+(?:\+[A-Za-z0-9]+)*(?::[a-z]+(?:,[a-z]+)*@[0-9.,;]+)?$/;
+
+    function googleFontLink(fonts) {
+      const specs = (Array.isArray(fonts) ? fonts : []).filter((spec) => GOOGLE_FONT_SPEC.test(String(spec)));
+      if (!specs.length) return '';
+      return '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?' + specs.map((spec) => 'family=' + spec).join('&') + '&display=swap" rel="stylesheet">';
+    }
+
     function proposalDocument(page) {
       const html = String(page.html || '').replace(/<script[\s\S]*?<\/script>/gi, '').replace(/\son\w+\s*=\s*(['"])[\s\S]*?\1/gi, '');
       const css = String(page.css || '').replace(/<\/style/gi, '<\\/style');
-      return '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><style>*{box-sizing:border-box}html,body{margin:0;min-height:100%;overflow-x:hidden}img{display:block;max-width:100%}button,a{font:inherit}' + css + '</style></head><body>' + html + '</body></html>';
+      const reset = '*{box-sizing:border-box}html,body{margin:0;min-height:100%;overflow-x:hidden}img{display:block;max-width:100%}button,a{font:inherit}';
+      return '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' + googleFontLink(page.fonts) + '<style>' + reset + 'body{background:' + safeColor(page.background, '#ffffff') + '}' + css + '</style></head><body>' + html + '</body></html>';
     }
 
     function proposalFrame(page) {
@@ -481,7 +490,7 @@
       artboard.innerHTML = pages.map((page, index) => {
         const frameWidth = page.viewport.width;
         const content = page.html ? proposalFrame(page) : page.nodes.map(renderNode).join('');
-        const preview = '<div class="overview-preview" style="width:' + page.viewport.width + 'px;height:' + frameHeight + 'px;transform:scale(' + scale + ');background:' + safeColor(page.background, '#f4f1ea') + '">' + content + '</div>';
+        const preview = '<div class="overview-preview" style="width:' + page.viewport.width + 'px;height:' + frameHeight + 'px;transform:scale(' + scale + ');background:' + safeColor(page.background, '#ffffff') + '">' + content + '</div>';
         return '<article class="overview-item" data-overview-page-id="' + escapeHtml(page.id) + '" style="width:' + frameWidth + 'px"><div class="overview-label"><strong>' + escapeHtml(page.name) + '</strong><div class="overview-meta"><span>' + (index + 1) + ' / ' + pages.length + '</span><button class="overview-open" data-overview-open="' + escapeHtml(page.id) + '" type="button">Open</button></div></div><div class="overview-frame" style="width:' + frameWidth + 'px;height:' + frameHeight + 'px">' + preview + '</div></article>';
       }).join('');
     }
@@ -511,7 +520,7 @@
       artboardChrome.style.width = state.document.viewport.width + 'px';
       artboard.style.width = state.document.viewport.width + 'px';
       artboard.style.height = state.document.viewport.height + 'px';
-      artboard.style.background = safeColor(state.document.background, '#f4f1ea');
+      artboard.style.background = safeColor(state.document.background, '#ffffff');
       artboard.style.transform = 'scale(' + state.zoom + ')';
       artboard.style.marginBottom = (state.document.viewport.height * (state.zoom - 1)) + 'px';
       if (currentPage()?.html) {
@@ -723,6 +732,19 @@
 
     let saveTimer;
     function queueSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveDocument, 380); setStatus('Unsaved changes'); }
+
+    async function checkForExternalUpdate() {
+      if (!state.document || state.saving || saveTimer) return;
+      try {
+        const response = await fetch('/api/document');
+        if (!response.ok) return;
+        const latest = await response.json();
+        if (latest.updatedAt !== state.document.updatedAt) await loadDocument();
+      } catch {
+        // Ignore transient poll errors; the next tick retries.
+      }
+    }
+    setInterval(checkForExternalUpdate, 2000);
 
     function addNode(kind) {
       const count = state.document.nodes.length + 1;

@@ -32,6 +32,21 @@ export type DesignNote = {
   text: string
 }
 
+export type DesignPlan = {
+  palette: Array<{
+    name: string
+    hex: string
+  }>
+  typography: Array<{
+    role: "display" | "body" | "utility"
+    family: string
+    usage: string
+  }>
+  layoutConcept: string
+  signature: string
+  risk: string
+}
+
 export type DesignEvidence = {
   sourceFiles: string[]
   preservedContent: string[]
@@ -99,9 +114,23 @@ export type DesignPage = {
   background: string
   html?: string
   css?: string
+  fonts?: string[]
+  plan?: DesignPlan
   evidence?: DesignEvidence
   nodes: DesignNode[]
   notes: DesignNote[]
+}
+
+export type DesignRound = {
+  round: number
+  createdAt: string
+  brief: string
+  directions: Array<{
+    name: string
+    direction: string
+    signature: string
+    palette: string[]
+  }>
 }
 
 export type DesignDocument = {
@@ -111,6 +140,7 @@ export type DesignDocument = {
   pages: DesignPage[]
   activePageId: string
   approvedPageId: string | null
+  history?: DesignRound[]
   updatedAt: string
 }
 
@@ -133,7 +163,7 @@ function defaultPage(brief = ""): DesignPage {
     direction: "Editorial workspace",
     summary: brief.trim() || "A first visual direction to refine in the canvas.",
     viewport: { width: 980, height: 640 },
-    background: "#f4f1ea",
+    background: "#ffffff",
     nodes: [
       {
         id: "eyebrow",
@@ -144,9 +174,9 @@ function defaultPage(brief = ""): DesignPage {
         y: 74,
         width: 220,
         height: 30,
-        fill: "#d7f36b",
-        color: "#10140d",
-        borderColor: "#10140d",
+        fill: "#ececec",
+        color: "#1a1a1a",
+        borderColor: "#1a1a1a",
         borderWidth: 1,
         radius: 999,
         fontSize: 11,
@@ -163,7 +193,7 @@ function defaultPage(brief = ""): DesignPage {
         width: 560,
         height: 124,
         fill: "transparent",
-        color: "#171a16",
+        color: "#1a1a1a",
         borderColor: "transparent",
         borderWidth: 0,
         radius: 0,
@@ -181,7 +211,7 @@ function defaultPage(brief = ""): DesignPage {
         width: 400,
         height: 72,
         fill: "transparent",
-        color: "#5d665d",
+        color: "#666666",
         borderColor: "transparent",
         borderWidth: 0,
         radius: 0,
@@ -198,9 +228,9 @@ function defaultPage(brief = ""): DesignPage {
         y: 422,
         width: 190,
         height: 56,
-        fill: "#171a16",
-        color: "#f8f7f1",
-        borderColor: "#171a16",
+        fill: "#1a1a1a",
+        color: "#ffffff",
+        borderColor: "#1a1a1a",
         borderWidth: 1,
         radius: 8,
         fontSize: 14,
@@ -216,9 +246,9 @@ function defaultPage(brief = ""): DesignPage {
         y: 132,
         width: 270,
         height: 320,
-        fill: "#171a16",
-        color: "#f8f7f1",
-        borderColor: "#171a16",
+        fill: "#1a1a1a",
+        color: "#ffffff",
+        borderColor: "#1a1a1a",
         borderWidth: 1,
         radius: 18,
         fontSize: 21,
@@ -234,9 +264,9 @@ function defaultPage(brief = ""): DesignPage {
         y: 480,
         width: 270,
         height: 52,
-        fill: "#fffdf8",
-        color: "#8b938a",
-        borderColor: "#b6beb3",
+        fill: "#ffffff",
+        color: "#767676",
+        borderColor: "#c6c6c6",
         borderWidth: 1,
         radius: 8,
         fontSize: 13,
@@ -287,7 +317,7 @@ function normalizeDocument(value: unknown): DesignDocument {
     direction: "Imported design",
     summary: typeof value.brief === "string" ? value.brief : "Imported from the previous canvas format.",
     viewport: value.viewport,
-    background: typeof value.background === "string" ? value.background : "#f4f1ea",
+    background: typeof value.background === "string" ? value.background : "#ffffff",
     nodes: value.nodes,
     notes: value.notes,
   } as DesignPage
@@ -314,6 +344,8 @@ export type DesignProposalInput = {
   background?: string
   html: string
   css: string
+  fonts?: string[]
+  plan: DesignPlan
   evidence: DesignEvidence
   nodes?: DesignNode[]
   notes?: DesignNote[]
@@ -358,8 +390,88 @@ function contrastRatio(foreground: string, background: string): number | null {
   return (Math.max(firstLuminance, secondLuminance) + 0.05) / (Math.min(firstLuminance, secondLuminance) + 0.05)
 }
 
+function cssMentionsColor(css: string, hex: string): boolean {
+  const normalized = hex.trim().toLowerCase().replace(/^#/, "")
+  if (!/^[0-9a-f]{6}$/.test(normalized)) return false
+  const haystack = css.toLowerCase()
+  if (haystack.includes(`#${normalized}`)) return true
+  const [r, g, b] = [normalized.slice(0, 2), normalized.slice(2, 4), normalized.slice(4, 6)]
+  const collapsible = r[0] === r[1] && g[0] === g[1] && b[0] === b[1]
+  if (collapsible && haystack.includes(`#${r[0]}${g[0]}${b[0]}`)) return true
+  const rgb = hexToRgb(normalized)
+  if (!rgb) return false
+  return new RegExp(`rgba?\\(\\s*${rgb[0]}\\s*[, ]\\s*${rgb[1]}\\s*[, ]\\s*${rgb[2]}\\b`).test(haystack)
+}
+
+const systemFontFamilies = [
+  "system-ui",
+  "ui-sans-serif",
+  "ui-serif",
+  "ui-monospace",
+  "-apple-system",
+  "blinkmacsystemfont",
+  "segoe ui",
+  "helvetica",
+  "arial",
+  "georgia",
+  "times new roman",
+  "courier new",
+  "menlo",
+  "monaco",
+  "serif",
+  "sans-serif",
+  "monospace",
+]
+
+const googleFontSpec = /^[A-Za-z0-9]+(?:\+[A-Za-z0-9]+)*(?::[a-z]+(?:,[a-z]+)*@[0-9.,;]+)?$/
+
+function fontSpecFamily(spec: string): string {
+  return spec.split(":")[0].replace(/\+/g, " ")
+}
+
+function validatePlan(proposal: DesignProposalInput, errors: string[]): void {
+  const plan = proposal.plan
+  const fonts = proposal.fonts ?? []
+  if (plan.palette.length < 4 || plan.palette.length > 6) errors.push("Plan palette must name between 4 and 6 colors")
+  if (new Set(plan.palette.map((color) => color.name.trim().toLowerCase())).size !== plan.palette.length) errors.push("Plan palette names must be distinct")
+  for (const color of plan.palette) {
+    if (color.name.trim().length < 3) errors.push(`Plan palette color needs a descriptive role name: ${color.hex}`)
+    if (!hexToRgb(color.hex)) {
+      errors.push(`Plan palette color must be a six-digit hex value: ${color.hex}`)
+      continue
+    }
+    if (!cssMentionsColor(proposal.css, color.hex)) errors.push(`Planned palette color is never used in CSS: ${color.name} (${color.hex})`)
+  }
+  const roles = new Set(plan.typography.map((face) => face.role))
+  if (!roles.has("display") || !roles.has("body")) errors.push("Plan typography must define at least a display role and a body role")
+  for (const face of plan.typography) {
+    if (face.usage.trim().length < 20) errors.push(`Plan typography must explain where the ${face.role} face is used`)
+    const family = face.family.trim()
+    if (family.length < 3) errors.push(`Plan typography needs a real family name for the ${face.role} role`)
+    if (!new RegExp(`font-family[^;}]*${family.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i").test(proposal.css)) {
+      errors.push(`Planned ${face.role} face is never applied in CSS: ${family}`)
+    }
+    const isSystemFace = systemFontFamilies.some((system) => family.toLowerCase().includes(system))
+    if (!isSystemFace && !fonts.some((spec) => fontSpecFamily(spec).toLowerCase() === family.toLowerCase())) {
+      errors.push(`Planned ${face.role} face "${family}" is not declared in fonts, so the canvas cannot load it`)
+    }
+  }
+  for (const spec of fonts) {
+    if (!googleFontSpec.test(spec)) errors.push(`Font spec is not a valid Google Fonts family spec: ${spec}`)
+    else if (!new RegExp(`font-family[^;}]*${fontSpecFamily(spec).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i").test(proposal.css)) {
+      errors.push(`Declared font is never used in CSS: ${spec}`)
+    }
+  }
+  if (plan.layoutConcept.trim().length < 80) errors.push("Plan must describe the layout concept in at least 80 characters")
+  if (plan.signature.trim().length < 60) errors.push("Plan must name the single signature element this design is remembered by")
+  if (plan.risk.trim().length < 60) errors.push("Plan must state the one deliberate aesthetic risk and why it is justified")
+}
+
 async function validateProposal(worktree: string, proposal: DesignProposalInput): Promise<void> {
   const errors: string[] = []
+  if (!hexToRgb(proposal.background ?? "")) errors.push("Every proposal must declare its own six-digit hex background instead of inheriting a default")
+  validatePlan(proposal, errors)
+  if (!/prefers-reduced-motion/i.test(proposal.css)) errors.push("CSS animates without honoring prefers-reduced-motion")
   if (proposal.html.length < 800) errors.push("HTML is too small to represent a finished surface")
   if (proposal.css.length < 1200) errors.push("CSS is too small to represent a polished responsive design")
   if (!/<(?:main|section|article|nav|header)\b/i.test(proposal.html)) errors.push("HTML lacks semantic structure")
@@ -405,6 +517,9 @@ async function validateProposal(worktree: string, proposal: DesignProposalInput)
     }
     const minimum = check.usage === "text" ? 4.5 : 3
     if (ratio < minimum) errors.push(`${check.usage} contrast ${ratio.toFixed(2)}:1 fails ${minimum}:1 for ${check.foreground} on ${check.background}`)
+    for (const [role, color] of [["foreground", check.foreground], ["background", check.background]] as const) {
+      if (!cssMentionsColor(proposal.css, color)) errors.push(`Contrast check ${role} ${color} is not a color the CSS actually uses`)
+    }
   }
   if (proposal.evidence.affordanceChecks.length < 3) errors.push("Evidence must review at least three important control affordances")
   for (const check of proposal.evidence.affordanceChecks) {
@@ -479,9 +594,11 @@ function proposalPage(input: DesignProposalInput, brief: string): DesignPage {
   page.name = input.name
   page.direction = input.direction
   page.summary = input.summary
-  page.background = input.background ?? page.background
+  page.background = input.background as string
   page.html = input.html
   page.css = input.css
+  page.fonts = input.fonts ?? []
+  page.plan = input.plan
   page.evidence = input.evidence
   page.nodes = input.nodes?.length ? normalizeProposalNodes(input.nodes) : []
   const viewport = input.viewport ?? (mobileLanding ? { width: 390, height: 1800 } : page.viewport)
@@ -504,6 +621,7 @@ export async function createDesignProposals(
   brief: string,
   proposals: DesignProposalInput[],
   append = false,
+  refinement = false,
 ): Promise<DesignDocument> {
   if (proposals.length !== 3) throw new Error("Exactly 3 design proposals are required")
   if (proposals.some((proposal) => !proposal.html.trim() || !proposal.css.trim())) throw new Error("Every proposal must include complete HTML and CSS")
@@ -517,6 +635,14 @@ export async function createDesignProposals(
       const firstDecisions = `${first.direction} ${first.evidence.designDecisions.join(" ")}`
       const secondDecisions = `${second.direction} ${second.evidence.designDecisions.join(" ")}`
       if (tokenSimilarity(firstDecisions, secondDecisions) > 0.82) throw new Error(`${first.name} and ${second.name} use indistinguishable design decisions`)
+      if (tokenSimilarity(first.plan.signature, second.plan.signature) > 0.7) throw new Error(`${first.name} and ${second.name} are remembered for the same signature element`)
+      const sharedPalette = first.plan.palette.filter((color) => second.plan.palette.some((other) => other.hex.toLowerCase() === color.hex.toLowerCase())).length
+      if (sharedPalette >= 4) throw new Error(`${first.name} and ${second.name} reuse the same palette; give each direction its own color story`)
+      const firstFaces = new Set((first.fonts ?? []).map((spec) => fontSpecFamily(spec).toLowerCase()))
+      const secondFaces = new Set((second.fonts ?? []).map((spec) => fontSpecFamily(spec).toLowerCase()))
+      if (firstFaces.size && firstFaces.size === secondFaces.size && [...firstFaces].every((face) => secondFaces.has(face))) {
+        throw new Error(`${first.name} and ${second.name} use an identical typeface pairing; typography is where each direction earns its personality`)
+      }
     }
   }
   const mobileLanding = /landing|móvil|mobile/i.test(brief) && !/desktop|escritorio/i.test(brief)
@@ -526,11 +652,40 @@ export async function createDesignProposals(
   const documentPath = join(worktree, ".opencode", "designs", "design.json")
   await ensureDocument(documentPath, brief)
   const document = await readDocument(documentPath)
+  const history = document.history ?? []
+  const previousRound = history[history.length - 1]
+  if (!append && previousRound && !refinement) {
+    for (const proposal of proposals) {
+      const repeated = previousRound.directions.find(
+        (direction) => tokenSimilarity(`${proposal.direction} ${proposal.plan.signature}`, `${direction.direction} ${direction.signature}`) > 0.9,
+      )
+      if (repeated) {
+        throw new Error(
+          `${proposal.name} repeats the previous round's direction "${repeated.name}". Explore a genuinely different direction, or pass refinement: true when the user asked to refine this one.`,
+        )
+      }
+    }
+  }
+  const outgoing = document.pages.filter((page) => page.plan)
+  if (!append && outgoing.length) {
+    history.push({
+      round: history.length + 1,
+      createdAt: new Date().toISOString(),
+      brief: document.brief,
+      directions: outgoing.map((page) => ({
+        name: page.name,
+        direction: page.direction,
+        signature: page.plan?.signature ?? "",
+        palette: page.plan?.palette.map((color) => color.hex) ?? [],
+      })),
+    })
+  }
   const pages = proposals.map((proposal) => proposalPage(proposal, brief || document.brief))
   document.pages = append ? [...document.pages, ...pages] : pages
   document.activePageId = document.pages[0].id
   document.approvedPageId = null
   document.brief = brief || document.brief
+  document.history = history
   await writeDocument(documentPath, document)
   return readDocument(documentPath)
 }
@@ -538,7 +693,7 @@ export async function createDesignProposals(
 export async function validateDesignDocument(worktree: string, document: DesignDocument): Promise<void> {
   if (document.pages.length !== 3) throw new Error("Exactly 3 design proposals are required")
   const proposals: DesignProposalInput[] = document.pages.map((page) => {
-    if (!page.html || !page.css || !page.evidence) throw new Error(`${page.name}: complete HTML, CSS, and evidence are required`)
+    if (!page.html || !page.css || !page.evidence || !page.plan) throw new Error(`${page.name}: complete HTML, CSS, plan, and evidence are required`)
     return {
       name: page.name,
       direction: page.direction,
@@ -547,6 +702,8 @@ export async function validateDesignDocument(worktree: string, document: DesignD
       background: page.background,
       html: page.html,
       css: page.css,
+      fonts: page.fonts,
+      plan: page.plan,
       evidence: page.evidence,
       nodes: page.nodes,
       notes: page.notes,
@@ -608,6 +765,27 @@ function requestBody(request: IncomingMessage): Promise<string> {
   })
 }
 
+const googleFontLink = (fonts: string[]): string => {
+  const specs = fonts.filter((spec) => googleFontSpec.test(spec))
+  if (!specs.length) return ""
+  const families = specs.map((spec) => `family=${spec}`).join("&")
+  return `<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?${families}&display=swap" rel="stylesheet">`
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#039;", '"': "&quot;" })[character] as string)
+}
+
+export function proposalPreviewDocument(page: DesignPage): string {
+  const html = String(page.html ?? "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/\son\w+\s*=\s*(['"])[\s\S]*?\1/gi, "")
+  const css = String(page.css ?? "").replace(/<\/style/gi, "<\\/style")
+  const background = hexToRgb(page.background) ? page.background : "#ffffff"
+  const reset = "*{box-sizing:border-box}html,body{margin:0;min-height:100%;overflow-x:hidden}img{display:block;max-width:100%}button,a{font:inherit}"
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(page.name)}</title>${googleFontLink(page.fonts ?? [])}<style>${reset}body{background:${background}}${css}</style></head><body>${html}</body></html>`
+}
+
 async function serveEditor(response: ServerResponse): Promise<void> {
   const html = await readFile(new URL("./design-editor.html", import.meta.url), "utf8")
   sendText(response, 200, html, "text/html; charset=utf-8")
@@ -626,6 +804,22 @@ export async function startDesignServer(worktree: string, brief = ""): Promise<D
 
       if (request.method === "GET" && url.pathname === "/") {
         await serveEditor(response)
+        return
+      }
+
+      if (request.method === "GET" && url.pathname === "/api/preview") {
+        const document = await readDocument(documentPath)
+        const pageId = url.searchParams.get("page")
+        const page = pageId ? document.pages.find((entry) => entry.id === pageId) : document.pages[0]
+        if (!page) {
+          sendJson(response, 404, { error: "Unknown proposal" })
+          return
+        }
+        if (!page.html) {
+          sendJson(response, 409, { error: "This proposal has no HTML to preview" })
+          return
+        }
+        sendText(response, 200, proposalPreviewDocument(page), "text/html; charset=utf-8")
         return
       }
 
