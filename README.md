@@ -7,6 +7,8 @@ Personal configuration for Claude Code and OpenCode.
 - `claude/` contains Claude Code instructions and shared skills.
 - `opencode/` contains OpenCode configuration, agents, commands, plugins, and OpenCode-specific skills.
 
+The global `/design` command generates three repository-grounded HTML/CSS proposals, validates visual evidence, contrast, affordance, and Nielsen heuristics, then presents them in a scrollable comparison canvas.
+
 Secrets are provided through environment variables and are intentionally not stored in this repository.
 
 ## Credentials
