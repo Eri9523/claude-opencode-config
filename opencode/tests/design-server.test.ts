@@ -284,6 +284,40 @@ async function run() {
     else fail("regenerating the previous round without refinement is rejected", (error as Error).message)
   }
 
+  // Incremental submission: one proposal per call keeps each payload small.
+  const [one, two, three] = round()
+  try {
+    let incremental = await createDesignProposals(worktree, brief, [one], false, true)
+    if (incremental.pages.length === 1) pass("a single proposal can open a round on its own")
+    else fail("a single proposal can open a round on its own", `got ${incremental.pages.length} pages`)
+    incremental = await createDesignProposals(worktree, brief, [two], true, true)
+    incremental = await createDesignProposals(worktree, brief, [three], true, true)
+    if (incremental.pages.length === 3) pass("appending one proposal at a time completes the round")
+    else fail("appending one proposal at a time completes the round", `got ${incremental.pages.length} pages`)
+  } catch (error) {
+    fail("appending one proposal at a time completes the round", (error as Error).message)
+  }
+
+  try {
+    await createDesignProposals(worktree, brief, [buildProposal({ ...variants[0], name: "Cuarta" }, sourceFiles)], true, true)
+    fail("a fourth appended proposal is rejected", "was accepted")
+  } catch (error) {
+    if ((error as Error).message.includes("at most 3 proposals")) pass("a fourth appended proposal is rejected")
+    else fail("a fourth appended proposal is rejected", (error as Error).message)
+  }
+
+  try {
+    const clash: Variant = { ...variants[1], name: "Choque", signature: variants[0].signature }
+    await createDesignProposals(worktree, brief, [buildProposal(clash, sourceFiles)], false, true)
+    await createDesignProposals(worktree, brief, [buildProposal({ ...variants[0], name: "Choque dos" }, sourceFiles)], true, true)
+    fail("an appended proposal is compared against the stored ones", "was accepted")
+  } catch (error) {
+    if ((error as Error).message.includes("same signature element")) pass("an appended proposal is compared against the stored ones")
+    else fail("an appended proposal is compared against the stored ones", (error as Error).message)
+  }
+
+  await expectOk("a full round can still be submitted in one call", round(), true)
+
   const document = await getDesignDocument(worktree)
   const server = await startDesignServer(worktree, brief)
   const page = document.pages[0]

@@ -616,27 +616,22 @@ function proposalPage(input: DesignProposalInput, brief: string): DesignPage {
   return page
 }
 
-export async function createDesignProposals(
-  worktree: string,
-  brief: string,
-  proposals: DesignProposalInput[],
-  append = false,
-  refinement = false,
-): Promise<DesignDocument> {
-  if (proposals.length !== 3) throw new Error("Exactly 3 design proposals are required")
-  if (proposals.some((proposal) => !proposal.html.trim() || !proposal.css.trim())) throw new Error("Every proposal must include complete HTML and CSS")
-  if (new Set(proposals.map((proposal) => proposal.name.trim().toLowerCase())).size !== 3) throw new Error("Proposal names must be distinct")
-  for (const proposal of proposals) await validateProposal(worktree, proposal)
-  for (let firstIndex = 0; firstIndex < proposals.length; firstIndex += 1) {
-    for (let secondIndex = firstIndex + 1; secondIndex < proposals.length; secondIndex += 1) {
-      const first = proposals[firstIndex]
-      const second = proposals[secondIndex]
-      if (first.html.trim() === second.html.trim() && first.css.trim() === second.css.trim()) throw new Error(`${first.name} and ${second.name} are identical`)
-      const firstDecisions = `${first.direction} ${first.evidence.designDecisions.join(" ")}`
-      const secondDecisions = `${second.direction} ${second.evidence.designDecisions.join(" ")}`
+const maxRoundSize = 3
+
+// Differentiation is checked across the whole resulting round, so a proposal
+// appended on its own is still compared against the ones already stored.
+function assertDistinctDirections(pages: DesignPage[]): void {
+  const comparable = pages.filter((page) => page.plan && page.html && page.css && page.evidence)
+  for (let firstIndex = 0; firstIndex < comparable.length; firstIndex += 1) {
+    for (let secondIndex = firstIndex + 1; secondIndex < comparable.length; secondIndex += 1) {
+      const first = comparable[firstIndex]
+      const second = comparable[secondIndex]
+      if (first.html!.trim() === second.html!.trim() && first.css!.trim() === second.css!.trim()) throw new Error(`${first.name} and ${second.name} are identical`)
+      const firstDecisions = `${first.direction} ${first.evidence!.designDecisions.join(" ")}`
+      const secondDecisions = `${second.direction} ${second.evidence!.designDecisions.join(" ")}`
       if (tokenSimilarity(firstDecisions, secondDecisions) > 0.82) throw new Error(`${first.name} and ${second.name} use indistinguishable design decisions`)
-      if (tokenSimilarity(first.plan.signature, second.plan.signature) > 0.7) throw new Error(`${first.name} and ${second.name} are remembered for the same signature element`)
-      const sharedPalette = first.plan.palette.filter((color) => second.plan.palette.some((other) => other.hex.toLowerCase() === color.hex.toLowerCase())).length
+      if (tokenSimilarity(first.plan!.signature, second.plan!.signature) > 0.7) throw new Error(`${first.name} and ${second.name} are remembered for the same signature element`)
+      const sharedPalette = first.plan!.palette.filter((color) => second.plan!.palette.some((other) => other.hex.toLowerCase() === color.hex.toLowerCase())).length
       if (sharedPalette >= 4) throw new Error(`${first.name} and ${second.name} reuse the same palette; give each direction its own color story`)
       const firstFaces = new Set((first.fonts ?? []).map((spec) => fontSpecFamily(spec).toLowerCase()))
       const secondFaces = new Set((second.fonts ?? []).map((spec) => fontSpecFamily(spec).toLowerCase()))
@@ -645,6 +640,20 @@ export async function createDesignProposals(
       }
     }
   }
+}
+
+export async function createDesignProposals(
+  worktree: string,
+  brief: string,
+  proposals: DesignProposalInput[],
+  append = false,
+  refinement = false,
+): Promise<DesignDocument> {
+  if (!proposals.length || proposals.length > maxRoundSize) {
+    throw new Error(`Submit between 1 and ${maxRoundSize} proposals per call. Sending one at a time keeps each payload small and surfaces validation errors immediately.`)
+  }
+  if (proposals.some((proposal) => !proposal.html.trim() || !proposal.css.trim())) throw new Error("Every proposal must include complete HTML and CSS")
+  for (const proposal of proposals) await validateProposal(worktree, proposal)
   const mobileLanding = /landing|móvil|mobile/i.test(brief) && !/desktop|escritorio/i.test(brief)
   if (mobileLanding && proposals.some((proposal) => (proposal.viewport?.width ?? 390) > 480)) {
     throw new Error("Landing proposals must use a mobile viewport of 480px or less unless desktop was requested")
@@ -654,7 +663,7 @@ export async function createDesignProposals(
   const document = await readDocument(documentPath)
   const history = document.history ?? []
   const previousRound = history[history.length - 1]
-  if (!append && previousRound && !refinement) {
+  if (previousRound && !refinement) {
     for (const proposal of proposals) {
       const repeated = previousRound.directions.find(
         (direction) => tokenSimilarity(`${proposal.direction} ${proposal.plan.signature}`, `${direction.direction} ${direction.signature}`) > 0.9,
@@ -681,7 +690,13 @@ export async function createDesignProposals(
     })
   }
   const pages = proposals.map((proposal) => proposalPage(proposal, brief || document.brief))
-  document.pages = append ? [...document.pages, ...pages] : pages
+  const nextPages = append ? [...document.pages, ...pages] : pages
+  if (nextPages.length > maxRoundSize) {
+    throw new Error(`A round holds at most ${maxRoundSize} proposals and the canvas already has ${document.pages.length}. Start a new round with append: false.`)
+  }
+  if (new Set(nextPages.map((page) => page.name.trim().toLowerCase())).size !== nextPages.length) throw new Error("Proposal names must be distinct")
+  assertDistinctDirections(nextPages)
+  document.pages = nextPages
   document.activePageId = document.pages[0].id
   document.approvedPageId = null
   document.brief = brief || document.brief

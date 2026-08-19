@@ -58,7 +58,8 @@ export const DesignCanvasPlugin: Plugin = async ({ $, worktree }) => {
         },
       }),
       design_create_proposals: tool({
-        description: "Create multiple visual design proposals in the local canvas for comparison.",
+        description:
+          "Add design proposals to the local canvas. Submit ONE proposal per call: use append: false for the first of a round and append: true for each of the next two. A round holds 3 proposals, but sending all three in a single call means emitting tens of thousands of tokens of JSON at once, which is slow and forces a full regeneration when any single check fails.",
         args: {
           brief: tool.schema.string().optional(),
           proposals: tool.schema.array(tool.schema.object({
@@ -163,9 +164,13 @@ export const DesignCanvasPlugin: Plugin = async ({ $, worktree }) => {
           const server = await startDesignServer(worktree, args.brief ?? "")
           const previous = document.history?.[document.history.length - 1]
           const previouslyTried = previous ? `\nAlready explored in round ${previous.round}: ${previous.directions.map((direction) => `${direction.name} (${direction.signature.slice(0, 80)})`).join("; ")}` : ""
+          const remaining = 3 - document.pages.length
+          const next = remaining > 0
+            ? `Accepted. ${remaining} more proposal${remaining === 1 ? "" : "s"} needed for a full round: call again with append: true.`
+            : "The round is complete. Call design_screenshot next and actually look at every proposal before presenting anything, then design_present once visual QA passes."
           return {
-            title: "Design proposal draft created",
-            output: `${document.pages.length} draft proposals are available at ${server.url}. Call design_screenshot next and actually look at every proposal before presenting anything. Call design_present only after visual QA passes.${previouslyTried}`,
+            title: `Proposal accepted (${document.pages.length}/3)`,
+            output: `${next}\nCanvas: ${server.url}${previouslyTried}`,
             metadata: { url: server.url, document },
           }
         },
