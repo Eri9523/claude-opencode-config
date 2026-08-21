@@ -42,6 +42,7 @@ Use this file as a short routing layer. Load a dedicated skill when a task needs
 ## Skills
 
 - `coding-guardrails`: TDD, validation, simplicity, and surgical changes.
+- `python-hexagonal-architecture`: Load for Python backend architecture, dependency injection, service boundaries, Protocol ports, adapters, or decorator-registered services and pipeline stages; it documents the `rauditor-backend-template` pattern.
 - `local-browser-testing`: Test local web apps through Playwright MCP; use for localhost UI verification, auth handoff, and responsive checks.
 - `tailwind-frontend`: Use Tailwind as the default styling system for frontend work in any technology, including Django templates and React.
 - `converting-css-to-tailwind`: Load when migrating existing CSS selectors and stylesheets to Tailwind utilities.
