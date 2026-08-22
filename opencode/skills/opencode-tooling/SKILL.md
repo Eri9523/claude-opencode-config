@@ -15,6 +15,13 @@ Use this skill for OpenCode configuration work.
 - Keep project configuration separate from global configuration unless the behavior is intentionally global.
 - Use `{env:VARIABLE}` for secrets; never write credentials directly into config files.
 
+## Worker Delegation
+
+- Use `task` to spawn a worker when configuration work has independent investigations, a broad repository search, or a separate review/validation pass that can proceed in parallel.
+- Prefer `explore` for read-only discovery, `general` for isolated changes, and `reviewer` for read-only critique.
+- Keep each worker focused on one objective and state its scope, file boundaries, and expected output. Do not run concurrent workers against the same files.
+- Skip delegation for a small, sequential edit. The primary agent integrates worker results, resolves conflicts, validates the final configuration, and remains responsible for the change.
+
 ## Locations
 
 - Global config: `~/.config/opencode/opencode.jsonc`

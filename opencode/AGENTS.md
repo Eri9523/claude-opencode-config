@@ -14,6 +14,9 @@ Use this file as a short routing layer. Load a dedicated skill when a task needs
 
 - Build context before editing. Use codegraph for architecture questions, then Glob/Grep/Read.
 - For feature and bug work, use TDD: failing check first, fix, then verify.
+- Spawn workers with `task` when a request has independent workstreams, broad repository exploration, or a separate review/validation pass that can run in parallel.
+- Use `explore` for read-only discovery, `general` for isolated implementation work, and `reviewer` for read-only review. Give each worker one focused objective, relevant paths, constraints, and an explicit expected result.
+- Do not spawn workers for small, sequential edits. Never let concurrent workers modify the same files; the primary agent owns integration, conflict resolution, and final verification.
 - Before commit, run the best available project validation and fix failures before committing.
 - Never commit or push unless Sergio explicitly asks.
 
