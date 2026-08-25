@@ -2,7 +2,7 @@ import { spawn } from "node:child_process"
 import { mkdtemp, mkdir, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { approveDesignPage, createDesignProposals, getDesignDocument, startDesignServer, validateDesignDocument, type DesignProposalInput } from "../plugins/design-server.ts"
+import { approveDesignPage, createDesignProposals, getDesignDocument, recordDesignIntake, startDesignServer, validateDesignDocument, type DesignIntakeInput, type DesignProposalInput } from "../plugins/design-server.ts"
 
 type Variant = {
   name: string
@@ -249,6 +249,56 @@ async function run() {
       if (message.toLowerCase().includes(needle.toLowerCase())) pass(label)
       else fail(label, `rejected for the wrong reason: ${message}`)
     }
+  }
+
+  const intake: DesignIntakeInput = {
+    brief,
+    context: "product-ui",
+    audience: "Compradores del catálogo que comparan medidas antes de encargar",
+    register: "neutral",
+    primaryAction: "Añadir la pieza a la cesta sin perder de vista el precio",
+    surface: "Ficha de producto del catálogo",
+    viewport: "mobile",
+    constraints: ["Se mantiene el precio 248,00 € del catálogo"],
+    outOfScope: ["El proceso de pago"],
+    userAnswers: ["Es la ficha pública del catálogo", "Tono neutro, ni corporativo ni de campaña"],
+  }
+
+  try {
+    await createDesignProposals(worktree, brief, round(), false, false)
+    fail("a round without a recorded intake is rejected", "was accepted")
+  } catch (error) {
+    if ((error as Error).message.includes("No design intake recorded")) pass("a round without a recorded intake is rejected")
+    else fail("a round without a recorded intake is rejected", (error as Error).message)
+  }
+
+  const expectIntakeReject = async (label: string, mutate: (input: DesignIntakeInput) => void, needle: string) => {
+    const candidate: DesignIntakeInput = JSON.parse(JSON.stringify(intake))
+    mutate(candidate)
+    try {
+      await recordDesignIntake(worktree, candidate)
+      fail(label, "was accepted but should have been rejected")
+    } catch (error) {
+      const message = (error as Error).message
+      if (message.toLowerCase().includes(needle.toLowerCase())) pass(label)
+      else fail(label, `rejected for the wrong reason: ${message}`)
+    }
+  }
+
+  await expectIntakeReject("an intake without the user's own answers is rejected", (input) => { input.userAnswers = [] }, "userAnswers")
+  await expectIntakeReject("a placeholder audience is rejected", (input) => { input.audience = "n/a" }, "audience")
+  await expectIntakeReject("a vague primary action is rejected", (input) => { input.primaryAction = "verlo" }, "primaryAction")
+
+  const recorded = await recordDesignIntake(worktree, intake)
+  if (recorded.intake?.audience === intake.audience && recorded.intake?.context === "product-ui") pass("the intake answers are stored on the design document")
+  else fail("the intake answers are stored on the design document", JSON.stringify(recorded.intake))
+
+  try {
+    await createDesignProposals(worktree, "Panel interno de facturación mensual para el equipo financiero", round(), false, true)
+    fail("a round for a different brief demands a fresh intake", "was accepted")
+  } catch (error) {
+    if ((error as Error).message.includes("answers a different brief")) pass("a round for a different brief demands a fresh intake")
+    else fail("a round for a different brief demands a fresh intake", (error as Error).message)
   }
 
   const first = await expectOk("a complete round of three planned proposals is accepted", round())

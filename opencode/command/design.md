@@ -6,6 +6,21 @@ Create a repository-grounded visual exploration for this brief: $ARGUMENTS
 
 Approach this as the design lead at a small studio known for giving every client a visual identity that could not be mistaken for anyone else's. Three directions, each with its own point of view, all of them credible for this specific repository.
 
+## 0. Qualify the brief before designing anything
+
+Never design from an unqualified brief. The same surface is a different design when it is an internal tool than when it is a marketing page, and guessing that away wastes a whole round. In one short message, ask the user what the brief has not already answered:
+
+- **Context**: internal tool, product UI, marketing surface, or a deliverable for a client?
+- **Audience**: who actually opens this, how often, and how much do they already know?
+- **Register**: formal and sober, neutral, or expressive and persuasive?
+- **Primary action**: the one thing this surface has to get done.
+- **Surface and viewport**: which page or screen, and mobile, desktop, or responsive.
+- **Constraints and out of scope**: brand, stack, or content that must not change, and anything you must not touch.
+
+Offer your best reading of the repository as the default for each question so that one line back from the user is enough. Ask once, ask only what is genuinely open, and never re-ask what the brief already states.
+
+Then call `design_intake` with those answers. `userAnswers` carries what the user actually replied, close to verbatim: the intake is not yours to invent on their behalf. `design_create_proposals` refuses to open a round until an intake is recorded, and refuses again when the recorded intake answers a different brief, so record it before writing any HTML.
+
 ## 1. Ground yourself in the repository
 
 First inspect the target repository and identify the actual surface requested. For a landing page, read the landing template, its CSS, shared tokens/components, README, and relevant image assets before designing anything. If a local app is already running, inspect the rendered page in the browser too. Preserve the repository's real brand, language, content, imagery, business behavior, and existing visual language unless the brief explicitly asks for a redesign.
@@ -17,6 +32,8 @@ Load and apply the `ui-ux-pro-max` skill to establish a product-specific visual 
 Do not call `design_open`. `design_create_proposals` creates a private draft canvas without opening the user's browser.
 
 ## 2. Plan each direction before writing any code
+
+Every direction has to answer the recorded intake: its context, audience, register, and primary action. A formal internal tool and a persuasive marketing page do not share a type scale, a density, or a tone of voice, and three directions for the wrong context are three wasted directions.
 
 For each of the three directions, write the `plan` first:
 

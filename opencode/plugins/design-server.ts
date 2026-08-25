@@ -32,6 +32,27 @@ export type DesignNote = {
   text: string
 }
 
+export type DesignIntakeContext = "internal-tool" | "product-ui" | "marketing" | "client-deliverable" | "other"
+export type DesignIntakeRegister = "formal" | "neutral" | "expressive"
+export type DesignIntakeViewport = "mobile" | "desktop" | "responsive"
+
+// The qualifying questions /design must ask before designing anything: the same
+// surface looks different when it is an internal tool than when it is a
+// marketing page, and guessing that wastes a whole round.
+export type DesignIntake = {
+  brief: string
+  context: DesignIntakeContext
+  audience: string
+  register: DesignIntakeRegister
+  primaryAction: string
+  surface: string
+  viewport: DesignIntakeViewport
+  constraints: string[]
+  outOfScope: string[]
+  userAnswers: string[]
+  answeredAt: string
+}
+
 export type DesignPlan = {
   palette: Array<{
     name: string
@@ -140,6 +161,7 @@ export type DesignDocument = {
   pages: DesignPage[]
   activePageId: string
   approvedPageId: string | null
+  intake?: DesignIntake
   history?: DesignRound[]
   updatedAt: string
 }
@@ -642,6 +664,84 @@ function assertDistinctDirections(pages: DesignPage[]): void {
   }
 }
 
+export type DesignIntakeInput = {
+  brief: string
+  context: DesignIntakeContext
+  audience: string
+  register: DesignIntakeRegister
+  primaryAction: string
+  surface: string
+  viewport: DesignIntakeViewport
+  constraints?: string[]
+  outOfScope?: string[]
+  userAnswers: string[]
+}
+
+const intakeContexts: DesignIntakeContext[] = ["internal-tool", "product-ui", "marketing", "client-deliverable", "other"]
+const intakeRegisters: DesignIntakeRegister[] = ["formal", "neutral", "expressive"]
+const intakeViewports: DesignIntakeViewport[] = ["mobile", "desktop", "responsive"]
+const placeholderAnswer = /^(n\/?a|na|none|nada|tbd|todo|unknown|desconocido|sin especificar|[-?.]+)$/i
+
+function cleanList(values: string[] | undefined): string[] {
+  return (values ?? []).map((value) => value.trim()).filter(Boolean).slice(0, 20)
+}
+
+function assertIntakeInput(input: DesignIntakeInput): void {
+  const errors: string[] = []
+  const filled = (value: string, minimum: number) => value.trim().length >= minimum && !placeholderAnswer.test(value.trim())
+  if (!filled(input.brief ?? "", 8)) errors.push("brief: restate what the user asked for")
+  if (!intakeContexts.includes(input.context)) errors.push(`context: one of ${intakeContexts.join(", ")}`)
+  if (!intakeRegisters.includes(input.register)) errors.push(`register: one of ${intakeRegisters.join(", ")}`)
+  if (!intakeViewports.includes(input.viewport)) errors.push(`viewport: one of ${intakeViewports.join(", ")}`)
+  if (!filled(input.audience ?? "", 3)) errors.push("audience: name who actually uses this surface")
+  if (!filled(input.primaryAction ?? "", 12)) errors.push("primaryAction: the one thing this surface must get done")
+  if (!filled(input.surface ?? "", 3)) errors.push("surface: which page or screen is being designed")
+  const answers = cleanList(input.userAnswers)
+  if (!answers.length || answers.join(" ").length < 10) errors.push("userAnswers: quote what the user answered; the intake cannot be invented")
+  if (errors.length) throw new Error(`The design intake is incomplete. Ask the user and record real answers -> ${errors.join("; ")}`)
+}
+
+export async function recordDesignIntake(worktree: string, input: DesignIntakeInput): Promise<DesignDocument> {
+  assertIntakeInput(input)
+  const documentPath = join(worktree, ".opencode", "designs", "design.json")
+  await ensureDocument(documentPath, input.brief)
+  const document = await readDocument(documentPath)
+  document.brief = input.brief.trim()
+  document.intake = {
+    brief: input.brief.trim(),
+    context: input.context,
+    audience: input.audience.trim(),
+    register: input.register,
+    primaryAction: input.primaryAction.trim(),
+    surface: input.surface.trim(),
+    viewport: input.viewport,
+    constraints: cleanList(input.constraints),
+    outOfScope: cleanList(input.outOfScope),
+    userAnswers: cleanList(input.userAnswers),
+    answeredAt: new Date().toISOString(),
+  }
+  await writeDocument(documentPath, document)
+  return readDocument(documentPath)
+}
+
+// Every round starts from answered questions. A surface for an internal tool and
+// the same surface as a marketing page are different designs, and the plugin will
+// not let the agent guess which one the user meant.
+function assertIntakeRecorded(document: DesignDocument, brief: string): void {
+  const intake = document.intake
+  if (!intake) {
+    throw new Error(
+      "No design intake recorded yet. Ask the user about context (internal tool, product UI, marketing, client deliverable), audience, register (formal, neutral, expressive), the primary action, the surface and its viewport, then call design_intake with their answers before creating proposals.",
+    )
+  }
+  const incoming = brief.trim()
+  if (incoming && intake.brief && tokenSimilarity(incoming, intake.brief) < 0.3) {
+    throw new Error(
+      `The recorded intake answers a different brief ("${intake.brief}"). Ask the intake questions again for "${incoming}" and call design_intake before designing.`,
+    )
+  }
+}
+
 export async function createDesignProposals(
   worktree: string,
   brief: string,
@@ -653,14 +753,15 @@ export async function createDesignProposals(
     throw new Error(`Submit between 1 and ${maxRoundSize} proposals per call. Sending one at a time keeps each payload small and surfaces validation errors immediately.`)
   }
   if (proposals.some((proposal) => !proposal.html.trim() || !proposal.css.trim())) throw new Error("Every proposal must include complete HTML and CSS")
+  const documentPath = join(worktree, ".opencode", "designs", "design.json")
+  await ensureDocument(documentPath, brief)
+  const document = await readDocument(documentPath)
+  assertIntakeRecorded(document, brief)
   for (const proposal of proposals) await validateProposal(worktree, proposal)
   const mobileLanding = /landing|móvil|mobile/i.test(brief) && !/desktop|escritorio/i.test(brief)
   if (mobileLanding && proposals.some((proposal) => (proposal.viewport?.width ?? 390) > 480)) {
     throw new Error("Landing proposals must use a mobile viewport of 480px or less unless desktop was requested")
   }
-  const documentPath = join(worktree, ".opencode", "designs", "design.json")
-  await ensureDocument(documentPath, brief)
-  const document = await readDocument(documentPath)
   const history = document.history ?? []
   const previousRound = history[history.length - 1]
   if (previousRound && !refinement) {
