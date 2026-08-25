@@ -1,7 +1,7 @@
 import { mkdir } from "node:fs/promises"
 import { join } from "node:path"
 import { tool, type Plugin } from "@opencode-ai/plugin"
-import { approveDesignPage, createDesignProposals, getDesignDocument, startDesignServer, validateDesignDocument } from "./design-server"
+import { approveDesignPage, createDesignProposals, getDesignDocument, recordDesignIntake, startDesignServer, validateDesignDocument } from "./design-server"
 
 async function openBrowser(shell: Parameters<Plugin>[0]["$"], url: string): Promise<void> {
   try {
@@ -39,6 +39,40 @@ export const DesignCanvasPlugin: Plugin = async ({ $, worktree }) => {
             title: "Design canvas opened",
             output: `Canvas: ${server.url}\nDocument: ${server.documentPath}\nThe user can select layers, edit properties, drag elements, and add notes in the browser.`,
             metadata: { url: server.url, documentPath: server.documentPath },
+          }
+        },
+      }),
+      design_intake: tool({
+        description:
+          "Record the answers to the /design qualifying questions. Ask the user first: this is the gate design_create_proposals checks, and it refuses to open a round until real answers are stored. Call it again whenever the brief changes.",
+        args: {
+          brief: tool.schema.string(),
+          context: tool.schema.enum(["internal-tool", "product-ui", "marketing", "client-deliverable", "other"]),
+          audience: tool.schema.string(),
+          register: tool.schema.enum(["formal", "neutral", "expressive"]),
+          primaryAction: tool.schema.string(),
+          surface: tool.schema.string(),
+          viewport: tool.schema.enum(["mobile", "desktop", "responsive"]),
+          constraints: tool.schema.array(tool.schema.string()).optional(),
+          outOfScope: tool.schema.array(tool.schema.string()).optional(),
+          userAnswers: tool.schema.array(tool.schema.string()),
+        },
+        async execute(args) {
+          const document = await recordDesignIntake(worktree, args)
+          const intake = document.intake!
+          const lines = [
+            `Context: ${intake.context}`,
+            `Audience: ${intake.audience}`,
+            `Register: ${intake.register}`,
+            `Primary action: ${intake.primaryAction}`,
+            `Surface: ${intake.surface} (${intake.viewport})`,
+            intake.constraints.length ? `Constraints: ${intake.constraints.join("; ")}` : "",
+            intake.outOfScope.length ? `Out of scope: ${intake.outOfScope.join("; ")}` : "",
+          ].filter(Boolean)
+          return {
+            title: "Design intake recorded",
+            output: `${lines.join("\n")}\n\nEvery direction must answer this brief. Design for this context and register, not for a generic version of the surface.`,
+            metadata: { intake },
           }
         },
       }),
