@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
+import { readFileSync } from "node:fs"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { dirname, extname, join, resolve, sep } from "node:path"
 
@@ -29,7 +30,45 @@ export type DesignNode = {
 export type DesignNote = {
   id: string
   nodeId: string | null
+  label?: string
   text: string
+}
+
+// An override is one manual adjustment the user made in the canvas, addressed
+// by its structural position in the proposal markup. Keeping edits as a layer
+// on top of the HTML/CSS means moving an element never rewrites the design.
+export type DesignOverride = {
+  path: string
+  label?: string
+  move?: {
+    x: number
+    y: number
+  }
+  style?: Record<string, string>
+  text?: string
+  hidden?: boolean
+  copies?: number
+}
+
+export type DesignIntakeContext = "internal-tool" | "product-ui" | "marketing" | "client-deliverable" | "other"
+export type DesignIntakeRegister = "formal" | "neutral" | "expressive"
+export type DesignIntakeViewport = "mobile" | "desktop" | "responsive"
+
+// The qualifying questions /design must ask before designing anything: the same
+// surface looks different when it is an internal tool than when it is a
+// marketing page, and guessing that wastes a whole round.
+export type DesignIntake = {
+  brief: string
+  context: DesignIntakeContext
+  audience: string
+  register: DesignIntakeRegister
+  primaryAction: string
+  surface: string
+  viewport: DesignIntakeViewport
+  constraints: string[]
+  outOfScope: string[]
+  userAnswers: string[]
+  answeredAt: string
 }
 
 export type DesignPlan = {
@@ -119,6 +158,7 @@ export type DesignPage = {
   evidence?: DesignEvidence
   nodes: DesignNode[]
   notes: DesignNote[]
+  overrides?: DesignOverride[]
 }
 
 export type DesignRound = {
@@ -140,6 +180,7 @@ export type DesignDocument = {
   pages: DesignPage[]
   activePageId: string
   approvedPageId: string | null
+  intake?: DesignIntake
   history?: DesignRound[]
   updatedAt: string
 }
@@ -349,6 +390,107 @@ export type DesignProposalInput = {
   evidence: DesignEvidence
   nodes?: DesignNode[]
   notes?: DesignNote[]
+}
+
+// Overrides come back from a browser the user controls, so the server keeps the
+// same allowlist the in-frame runtime enforces before storing them.
+const allowedOverrideProperties = new Set([
+  "align-items",
+  "aspect-ratio",
+  "background",
+  "background-color",
+  "border-color",
+  "border-radius",
+  "border-style",
+  "border-width",
+  "box-shadow",
+  "color",
+  "column-gap",
+  "display",
+  "flex-direction",
+  "flex-wrap",
+  "font-family",
+  "font-size",
+  "font-style",
+  "font-weight",
+  "gap",
+  "height",
+  "justify-content",
+  "letter-spacing",
+  "line-height",
+  "margin",
+  "margin-bottom",
+  "margin-left",
+  "margin-right",
+  "margin-top",
+  "max-height",
+  "max-width",
+  "min-height",
+  "min-width",
+  "mix-blend-mode",
+  "object-fit",
+  "opacity",
+  "order",
+  "padding",
+  "padding-bottom",
+  "padding-left",
+  "padding-right",
+  "padding-top",
+  "row-gap",
+  "text-align",
+  "text-decoration",
+  "text-transform",
+  "width",
+  "z-index",
+])
+
+const unsafeCssValue = /url\(|expression\(|@import|javascript:|[<>{};]/i
+
+export function sanitizeDesignOverrides(value: unknown): DesignOverride[] {
+  if (!Array.isArray(value)) return []
+  const sanitized: DesignOverride[] = []
+  for (const entry of value.slice(0, 400)) {
+    if (!isRecord(entry) || typeof entry.path !== "string" || !/^\d+(\.\d+)*$/.test(entry.path)) continue
+    const override: DesignOverride = { path: entry.path }
+    if (typeof entry.label === "string" && entry.label.trim()) override.label = entry.label.slice(0, 120)
+    if (isRecord(entry.move)) {
+      const x = Math.round(Number(entry.move.x) || 0)
+      const y = Math.round(Number(entry.move.y) || 0)
+      if (Number.isFinite(x) && Number.isFinite(y) && (x || y)) override.move = { x, y }
+    }
+    if (isRecord(entry.style)) {
+      const style: Record<string, string> = {}
+      for (const [property, declared] of Object.entries(entry.style)) {
+        if (!allowedOverrideProperties.has(property) || typeof declared !== "string") continue
+        const declaration = declared.trim()
+        if (!declaration || declaration.length > 200 || unsafeCssValue.test(declaration)) continue
+        style[property] = declaration
+      }
+      if (Object.keys(style).length) override.style = style
+    }
+    if (typeof entry.text === "string") override.text = entry.text.slice(0, 4000)
+    if (entry.hidden === true) override.hidden = true
+    if (typeof entry.copies === "number" && entry.copies > 0) override.copies = Math.min(6, Math.round(entry.copies))
+    const meaningful = override.move || override.style || override.text !== undefined || override.hidden || override.copies
+    if (meaningful) sanitized.push(override)
+  }
+  return sanitized
+}
+
+let runtimeSource: string | null = null
+
+// The same runtime powers the editable canvas frame and the headless preview, so
+// a screenshot always shows the design with the user's adjustments applied.
+export function designRuntimeSource(): string {
+  if (runtimeSource === null) {
+    runtimeSource = readFileSync(new URL("./design-runtime.js", import.meta.url), "utf8").replace(/<\/script/gi, "<\\/script")
+  }
+  return runtimeSource
+}
+
+export function designRuntimeTag(overrides: DesignOverride[], mode: "edit" | "apply"): string {
+  const payload = JSON.stringify({ mode, overrides }).replace(/</g, "\\u003c")
+  return `<script>window.__design=${payload}</script><script>${designRuntimeSource()}</script>`
 }
 
 function assertWorktreePath(worktree: string, relativePath: string): string {
@@ -613,6 +755,7 @@ function proposalPage(input: DesignProposalInput, brief: string): DesignPage {
     page.viewport = viewport
   }
   page.notes = input.notes ?? [{ id: `${page.id}-note`, nodeId: page.nodes[0]?.id ?? null, text: input.summary }]
+  page.overrides = []
   return page
 }
 
@@ -642,6 +785,84 @@ function assertDistinctDirections(pages: DesignPage[]): void {
   }
 }
 
+export type DesignIntakeInput = {
+  brief: string
+  context: DesignIntakeContext
+  audience: string
+  register: DesignIntakeRegister
+  primaryAction: string
+  surface: string
+  viewport: DesignIntakeViewport
+  constraints?: string[]
+  outOfScope?: string[]
+  userAnswers: string[]
+}
+
+const intakeContexts: DesignIntakeContext[] = ["internal-tool", "product-ui", "marketing", "client-deliverable", "other"]
+const intakeRegisters: DesignIntakeRegister[] = ["formal", "neutral", "expressive"]
+const intakeViewports: DesignIntakeViewport[] = ["mobile", "desktop", "responsive"]
+const placeholderAnswer = /^(n\/?a|na|none|nada|tbd|todo|unknown|desconocido|sin especificar|[-?.]+)$/i
+
+function cleanList(values: string[] | undefined): string[] {
+  return (values ?? []).map((value) => value.trim()).filter(Boolean).slice(0, 20)
+}
+
+function assertIntakeInput(input: DesignIntakeInput): void {
+  const errors: string[] = []
+  const filled = (value: string, minimum: number) => value.trim().length >= minimum && !placeholderAnswer.test(value.trim())
+  if (!filled(input.brief ?? "", 8)) errors.push("brief: restate what the user asked for")
+  if (!intakeContexts.includes(input.context)) errors.push(`context: one of ${intakeContexts.join(", ")}`)
+  if (!intakeRegisters.includes(input.register)) errors.push(`register: one of ${intakeRegisters.join(", ")}`)
+  if (!intakeViewports.includes(input.viewport)) errors.push(`viewport: one of ${intakeViewports.join(", ")}`)
+  if (!filled(input.audience ?? "", 3)) errors.push("audience: name who actually uses this surface")
+  if (!filled(input.primaryAction ?? "", 12)) errors.push("primaryAction: the one thing this surface must get done")
+  if (!filled(input.surface ?? "", 3)) errors.push("surface: which page or screen is being designed")
+  const answers = cleanList(input.userAnswers)
+  if (!answers.length || answers.join(" ").length < 10) errors.push("userAnswers: quote what the user answered; the intake cannot be invented")
+  if (errors.length) throw new Error(`The design intake is incomplete. Ask the user and record real answers -> ${errors.join("; ")}`)
+}
+
+export async function recordDesignIntake(worktree: string, input: DesignIntakeInput): Promise<DesignDocument> {
+  assertIntakeInput(input)
+  const documentPath = join(worktree, ".opencode", "designs", "design.json")
+  await ensureDocument(documentPath, input.brief)
+  const document = await readDocument(documentPath)
+  document.brief = input.brief.trim()
+  document.intake = {
+    brief: input.brief.trim(),
+    context: input.context,
+    audience: input.audience.trim(),
+    register: input.register,
+    primaryAction: input.primaryAction.trim(),
+    surface: input.surface.trim(),
+    viewport: input.viewport,
+    constraints: cleanList(input.constraints),
+    outOfScope: cleanList(input.outOfScope),
+    userAnswers: cleanList(input.userAnswers),
+    answeredAt: new Date().toISOString(),
+  }
+  await writeDocument(documentPath, document)
+  return readDocument(documentPath)
+}
+
+// Every round starts from answered questions. A surface for an internal tool and
+// the same surface as a marketing page are different designs, and the plugin will
+// not let the agent guess which one the user meant.
+function assertIntakeRecorded(document: DesignDocument, brief: string): void {
+  const intake = document.intake
+  if (!intake) {
+    throw new Error(
+      "No design intake recorded yet. Ask the user about context (internal tool, product UI, marketing, client deliverable), audience, register (formal, neutral, expressive), the primary action, the surface and its viewport, then call design_intake with their answers before creating proposals.",
+    )
+  }
+  const incoming = brief.trim()
+  if (incoming && intake.brief && tokenSimilarity(incoming, intake.brief) < 0.3) {
+    throw new Error(
+      `The recorded intake answers a different brief ("${intake.brief}"). Ask the intake questions again for "${incoming}" and call design_intake before designing.`,
+    )
+  }
+}
+
 export async function createDesignProposals(
   worktree: string,
   brief: string,
@@ -653,14 +874,15 @@ export async function createDesignProposals(
     throw new Error(`Submit between 1 and ${maxRoundSize} proposals per call. Sending one at a time keeps each payload small and surfaces validation errors immediately.`)
   }
   if (proposals.some((proposal) => !proposal.html.trim() || !proposal.css.trim())) throw new Error("Every proposal must include complete HTML and CSS")
+  const documentPath = join(worktree, ".opencode", "designs", "design.json")
+  await ensureDocument(documentPath, brief)
+  const document = await readDocument(documentPath)
+  assertIntakeRecorded(document, brief)
   for (const proposal of proposals) await validateProposal(worktree, proposal)
   const mobileLanding = /landing|móvil|mobile/i.test(brief) && !/desktop|escritorio/i.test(brief)
   if (mobileLanding && proposals.some((proposal) => (proposal.viewport?.width ?? 390) > 480)) {
     throw new Error("Landing proposals must use a mobile viewport of 480px or less unless desktop was requested")
   }
-  const documentPath = join(worktree, ".opencode", "designs", "design.json")
-  await ensureDocument(documentPath, brief)
-  const document = await readDocument(documentPath)
   const history = document.history ?? []
   const previousRound = history[history.length - 1]
   if (previousRound && !refinement) {
@@ -833,12 +1055,19 @@ export function proposalPreviewDocument(page: DesignPage): string {
   const css = String(page.css ?? "").replace(/<\/style/gi, "<\\/style")
   const background = hexToRgb(page.background) ? page.background : "#ffffff"
   const reset = "*{box-sizing:border-box}html,body{margin:0;min-height:100%;overflow-x:hidden}img{display:block;max-width:100%}button,a{font:inherit}"
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(page.name)}</title>${googleFontLink(page.fonts ?? [])}<style>${reset}body{background:${background}}${css}</style></head><body>${html}</body></html>`
+  const runtime = designRuntimeTag(sanitizeDesignOverrides(page.overrides), "apply")
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(page.name)}</title>${googleFontLink(page.fonts ?? [])}<style>${reset}body{background:${background}}${css}</style></head><body>${html}${runtime}</body></html>`
 }
 
 async function serveEditor(response: ServerResponse): Promise<void> {
   const html = await readFile(new URL("./design-editor.html", import.meta.url), "utf8")
-  sendText(response, 200, html, "text/html; charset=utf-8")
+  // The canvas embeds the frame runtime verbatim into every proposal iframe, so
+  // it is shipped inside the editor instead of fetched as a separate script.
+  const withRuntime = html.replace(
+    "<!--design-runtime-->",
+    `<script type="text/plain" id="iframe-runtime">${designRuntimeSource()}</script>`,
+  )
+  sendText(response, 200, withRuntime, "text/html; charset=utf-8")
 }
 
 export async function startDesignServer(worktree: string, brief = ""): Promise<DesignServer> {
@@ -918,7 +1147,15 @@ export async function startDesignServer(worktree: string, brief = ""): Promise<D
           sendJson(response, 400, { error: "Invalid design document" })
           return
         }
-        await writeDocument(documentPath, parsed)
+        // The canvas may only edit proposals: every override is filtered through
+        // the allowlist, and the recorded intake stays whatever the agent stored.
+        const stored = await readDocument(documentPath)
+        const next: DesignDocument = {
+          ...parsed,
+          intake: stored.intake,
+          pages: parsed.pages.map((page) => ({ ...page, overrides: sanitizeDesignOverrides(page.overrides) })),
+        }
+        await writeDocument(documentPath, next)
         sendJson(response, 200, await readDocument(documentPath))
         return
       }
