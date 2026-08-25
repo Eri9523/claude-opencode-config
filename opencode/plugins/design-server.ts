@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
+import { readFileSync } from "node:fs"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { dirname, extname, join, resolve, sep } from "node:path"
 
@@ -29,7 +30,24 @@ export type DesignNode = {
 export type DesignNote = {
   id: string
   nodeId: string | null
+  label?: string
   text: string
+}
+
+// An override is one manual adjustment the user made in the canvas, addressed
+// by its structural position in the proposal markup. Keeping edits as a layer
+// on top of the HTML/CSS means moving an element never rewrites the design.
+export type DesignOverride = {
+  path: string
+  label?: string
+  move?: {
+    x: number
+    y: number
+  }
+  style?: Record<string, string>
+  text?: string
+  hidden?: boolean
+  copies?: number
 }
 
 export type DesignIntakeContext = "internal-tool" | "product-ui" | "marketing" | "client-deliverable" | "other"
@@ -140,6 +158,7 @@ export type DesignPage = {
   evidence?: DesignEvidence
   nodes: DesignNode[]
   notes: DesignNote[]
+  overrides?: DesignOverride[]
 }
 
 export type DesignRound = {
@@ -371,6 +390,107 @@ export type DesignProposalInput = {
   evidence: DesignEvidence
   nodes?: DesignNode[]
   notes?: DesignNote[]
+}
+
+// Overrides come back from a browser the user controls, so the server keeps the
+// same allowlist the in-frame runtime enforces before storing them.
+const allowedOverrideProperties = new Set([
+  "align-items",
+  "aspect-ratio",
+  "background",
+  "background-color",
+  "border-color",
+  "border-radius",
+  "border-style",
+  "border-width",
+  "box-shadow",
+  "color",
+  "column-gap",
+  "display",
+  "flex-direction",
+  "flex-wrap",
+  "font-family",
+  "font-size",
+  "font-style",
+  "font-weight",
+  "gap",
+  "height",
+  "justify-content",
+  "letter-spacing",
+  "line-height",
+  "margin",
+  "margin-bottom",
+  "margin-left",
+  "margin-right",
+  "margin-top",
+  "max-height",
+  "max-width",
+  "min-height",
+  "min-width",
+  "mix-blend-mode",
+  "object-fit",
+  "opacity",
+  "order",
+  "padding",
+  "padding-bottom",
+  "padding-left",
+  "padding-right",
+  "padding-top",
+  "row-gap",
+  "text-align",
+  "text-decoration",
+  "text-transform",
+  "width",
+  "z-index",
+])
+
+const unsafeCssValue = /url\(|expression\(|@import|javascript:|[<>{};]/i
+
+export function sanitizeDesignOverrides(value: unknown): DesignOverride[] {
+  if (!Array.isArray(value)) return []
+  const sanitized: DesignOverride[] = []
+  for (const entry of value.slice(0, 400)) {
+    if (!isRecord(entry) || typeof entry.path !== "string" || !/^\d+(\.\d+)*$/.test(entry.path)) continue
+    const override: DesignOverride = { path: entry.path }
+    if (typeof entry.label === "string" && entry.label.trim()) override.label = entry.label.slice(0, 120)
+    if (isRecord(entry.move)) {
+      const x = Math.round(Number(entry.move.x) || 0)
+      const y = Math.round(Number(entry.move.y) || 0)
+      if (Number.isFinite(x) && Number.isFinite(y) && (x || y)) override.move = { x, y }
+    }
+    if (isRecord(entry.style)) {
+      const style: Record<string, string> = {}
+      for (const [property, declared] of Object.entries(entry.style)) {
+        if (!allowedOverrideProperties.has(property) || typeof declared !== "string") continue
+        const declaration = declared.trim()
+        if (!declaration || declaration.length > 200 || unsafeCssValue.test(declaration)) continue
+        style[property] = declaration
+      }
+      if (Object.keys(style).length) override.style = style
+    }
+    if (typeof entry.text === "string") override.text = entry.text.slice(0, 4000)
+    if (entry.hidden === true) override.hidden = true
+    if (typeof entry.copies === "number" && entry.copies > 0) override.copies = Math.min(6, Math.round(entry.copies))
+    const meaningful = override.move || override.style || override.text !== undefined || override.hidden || override.copies
+    if (meaningful) sanitized.push(override)
+  }
+  return sanitized
+}
+
+let runtimeSource: string | null = null
+
+// The same runtime powers the editable canvas frame and the headless preview, so
+// a screenshot always shows the design with the user's adjustments applied.
+export function designRuntimeSource(): string {
+  if (runtimeSource === null) {
+    runtimeSource = readFileSync(new URL("./design-runtime.js", import.meta.url), "utf8").replace(/<\/script/gi, "<\\/script")
+  }
+  return runtimeSource
+}
+
+export function designRuntimeTag(overrides: DesignOverride[], mode: "edit" | "apply"): string {
+  const payload = JSON.stringify({ mode, overrides }).replace(/</g, "\\u003c")
+  return `<script>window.__design=${payload}</script><script>${designRuntimeSource()}</script>`
 }
 
 function assertWorktreePath(worktree: string, relativePath: string): string {
@@ -635,6 +755,7 @@ function proposalPage(input: DesignProposalInput, brief: string): DesignPage {
     page.viewport = viewport
   }
   page.notes = input.notes ?? [{ id: `${page.id}-note`, nodeId: page.nodes[0]?.id ?? null, text: input.summary }]
+  page.overrides = []
   return page
 }
 
@@ -934,12 +1055,19 @@ export function proposalPreviewDocument(page: DesignPage): string {
   const css = String(page.css ?? "").replace(/<\/style/gi, "<\\/style")
   const background = hexToRgb(page.background) ? page.background : "#ffffff"
   const reset = "*{box-sizing:border-box}html,body{margin:0;min-height:100%;overflow-x:hidden}img{display:block;max-width:100%}button,a{font:inherit}"
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(page.name)}</title>${googleFontLink(page.fonts ?? [])}<style>${reset}body{background:${background}}${css}</style></head><body>${html}</body></html>`
+  const runtime = designRuntimeTag(sanitizeDesignOverrides(page.overrides), "apply")
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(page.name)}</title>${googleFontLink(page.fonts ?? [])}<style>${reset}body{background:${background}}${css}</style></head><body>${html}${runtime}</body></html>`
 }
 
 async function serveEditor(response: ServerResponse): Promise<void> {
   const html = await readFile(new URL("./design-editor.html", import.meta.url), "utf8")
-  sendText(response, 200, html, "text/html; charset=utf-8")
+  // The canvas embeds the frame runtime verbatim into every proposal iframe, so
+  // it is shipped inside the editor instead of fetched as a separate script.
+  const withRuntime = html.replace(
+    "<!--design-runtime-->",
+    `<script type="text/plain" id="iframe-runtime">${designRuntimeSource()}</script>`,
+  )
+  sendText(response, 200, withRuntime, "text/html; charset=utf-8")
 }
 
 export async function startDesignServer(worktree: string, brief = ""): Promise<DesignServer> {
@@ -1019,7 +1147,15 @@ export async function startDesignServer(worktree: string, brief = ""): Promise<D
           sendJson(response, 400, { error: "Invalid design document" })
           return
         }
-        await writeDocument(documentPath, parsed)
+        // The canvas may only edit proposals: every override is filtered through
+        // the allowlist, and the recorded intake stays whatever the agent stored.
+        const stored = await readDocument(documentPath)
+        const next: DesignDocument = {
+          ...parsed,
+          intake: stored.intake,
+          pages: parsed.pages.map((page) => ({ ...page, overrides: sanitizeDesignOverrides(page.overrides) })),
+        }
+        await writeDocument(documentPath, next)
         sendJson(response, 200, await readDocument(documentPath))
         return
       }

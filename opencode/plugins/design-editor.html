@@ -80,6 +80,8 @@
     .tool-group { display: flex; align-items: center; gap: 5px; }
     .tool-button { min-width: 34px; padding: 0 8px; font-size: 12px; }
     .tool-button.active { color: var(--text); background: var(--selected); }
+    .tool-button:disabled { opacity: .4; cursor: not-allowed; }
+    .tool-button:disabled:hover { background: transparent; color: var(--muted); }
     .zoom { display: flex; align-items: center; gap: 7px; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 11px; }
     .zoom select { border: 1px solid var(--line); border-radius: 5px; padding: 6px 7px; background: var(--panel-strong); color: var(--text); font-size: 11px; }
     .canvas-scroll { flex: 1; min-height: 0; overflow: auto; padding: 78px; background: var(--bg); }
@@ -178,6 +180,22 @@
     .play-stage { display: grid; place-items: center; min-height: 0; flex: 1; overflow: auto; padding: 42px; background: var(--bg); }
     .play-stage .artboard { transform: none !important; margin: 0 !important; }
 
+    .tool-group[hidden] { display: none; }
+    .tool-hint { color: var(--subtle); font-size: 11px; white-space: nowrap; }
+    .tool-count { min-width: 18px; padding: 1px 5px; border-radius: 999px; background: var(--selected); color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 9px; }
+    .brief-chip { display: flex; align-items: center; gap: 7px; max-width: 340px; padding: 4px 9px; border: 1px solid var(--line-soft); border-radius: 999px; color: var(--muted); font-size: 11px; }
+    .brief-chip[hidden] { display: none; }
+    .brief-chip strong { color: var(--text); font-weight: 600; }
+    .brief-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .element-frame { pointer-events: auto; }
+    .edit-list { display: grid; gap: 4px; }
+    .edit-item { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 4px 0 9px; border: 1px solid var(--line-soft); border-radius: 6px; color: var(--muted); font-size: 11px; }
+    .edit-item.current { border-color: rgba(224, 137, 104, .48); color: var(--accent); }
+    .edit-item button { min-height: 24px; padding: 0 7px; border: 0; border-radius: 4px; background: transparent; color: var(--subtle); cursor: pointer; font-size: 10px; }
+    .edit-item button:hover { background: rgba(250, 249, 245, .13); color: var(--text); }
+    .edit-item-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'JetBrains Mono', monospace; }
+    .edit-item-kind { color: var(--subtle); font-size: 9px; text-transform: uppercase; }
+
     @media (max-width: 1060px) {
       .app, .app.inspector-open { grid-template-columns: minmax(0, 1fr); grid-template-rows: 48px minmax(0, 1fr) auto; }
       .workspace { grid-column: 1; }
@@ -244,9 +262,19 @@
         <div class="tool-group">
           <button class="tool-button active" id="select-tool" type="button" title="Select and move elements">Select</button>
           <button class="tool-button" id="note-tool" type="button" title="Add a note to the selected element">Note</button>
-          <button class="tool-button" id="add-text-button" type="button" title="Add a text layer">Text</button>
-          <button class="tool-button" id="add-card-button" type="button" title="Add a card layer">Card</button>
+          <span class="tool-group" id="node-tools">
+            <button class="tool-button" id="add-text-button" type="button" title="Add a text layer">Text</button>
+            <button class="tool-button" id="add-card-button" type="button" title="Add a card layer">Card</button>
+          </span>
+          <span class="tool-group" id="element-tools" hidden>
+            <button class="tool-button" id="duplicate-element-button" type="button" title="Duplicar el elemento seleccionado">Duplicar</button>
+            <button class="tool-button" id="hide-element-button" type="button" title="Ocultar o mostrar el elemento seleccionado">Ocultar</button>
+            <button class="tool-button" id="reset-element-button" type="button" title="Deshacer los cambios de este elemento">Restablecer</button>
+            <button class="tool-button" id="reset-all-button" type="button" title="Deshacer todos los cambios manuales de esta propuesta">Restablecer todo<span class="tool-count" id="edit-count">0</span></button>
+          </span>
+          <span class="tool-hint" id="canvas-hint" hidden>Clic para seleccionar, arrastra para mover con guias de alineacion, Alt para ignorarlas, doble clic para editar el texto</span>
         </div>
+        <div class="brief-chip" id="brief-chip" hidden></div>
         <div class="zoom"><span>Zoom</span><select id="zoom-select" aria-label="Canvas zoom"><option value="0.5">50%</option><option value="0.75">75%</option><option value="1" selected>100%</option><option value="1.25">125%</option></select></div>
       </div>
       <div class="canvas-scroll" id="canvas-scroll">
@@ -284,8 +312,10 @@
     <div class="play-stage" id="play-stage"></div>
   </div>
 
+  <!--design-runtime-->
+
   <script>
-    const state = { document: null, selectedId: null, editingId: null, editingNoteId: null, inspectorOpen: false, overview: false, overviewScrollLeft: 0, zoom: 1, dragging: null, guides: [], saving: false, history: [], future: [] };
+    const state = { document: null, selectedId: null, editingId: null, editingNoteId: null, inspectorOpen: false, overview: false, overviewScrollLeft: 0, zoom: 1, dragging: null, guides: [], saving: false, history: [], future: [], element: null, framePageId: null, frameMode: null, lastHistoryAt: 0 };
     const artboard = document.getElementById('artboard');
     const inspector = document.getElementById('inspector-content');
     const layerList = document.getElementById('layer-list');
@@ -330,15 +360,26 @@
       return '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?' + specs.map((spec) => 'family=' + spec).join('&') + '&display=swap" rel="stylesheet">';
     }
 
-    function proposalDocument(page) {
+    function runtimeSource() {
+      const holder = document.getElementById('iframe-runtime');
+      return holder ? holder.textContent : '';
+    }
+
+    // The runtime is embedded in every proposal frame: in "apply" mode it only
+    // replays the saved overrides, in "edit" mode it also lets the user select,
+    // drag and retype elements without rewriting the proposal markup.
+    function proposalDocument(page, mode) {
       const html = String(page.html || '').replace(/<script[\s\S]*?<\/script>/gi, '').replace(/\son\w+\s*=\s*(['"])[\s\S]*?\1/gi, '');
       const css = String(page.css || '').replace(/<\/style/gi, '<\\/style');
       const reset = '*{box-sizing:border-box}html,body{margin:0;min-height:100%;overflow-x:hidden}img{display:block;max-width:100%}button,a{font:inherit}';
-      return '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' + googleFontLink(page.fonts) + '<style>' + reset + 'body{background:' + safeColor(page.background, '#ffffff') + '}' + css + '</style></head><body>' + html + '</body></html>';
+      const config = JSON.stringify({ mode: mode === 'edit' ? 'edit' : 'apply', overrides: pageOverrides(page) }).replace(/</g, '\\u003c');
+      const runtime = '<script>window.__design=' + config + ';<\/script><script>' + runtimeSource() + '<\/script>';
+      return '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' + googleFontLink(page.fonts) + '<style>' + reset + 'body{background:' + safeColor(page.background, '#ffffff') + '}' + css + '</style></head><body>' + html + runtime + '</body></html>';
     }
 
-    function proposalFrame(page) {
-      return '<iframe class="proposal-frame" title="' + escapeHtml(page.name) + '" sandbox srcdoc="' + escapeHtml(proposalDocument(page)) + '"></iframe>';
+    function proposalFrame(page, mode) {
+      const editable = mode === 'edit';
+      return '<iframe class="proposal-frame' + (editable ? ' element-frame' : '') + '" title="' + escapeHtml(page.name) + '"' + (editable ? ' data-frame-page="' + escapeHtml(page.id) + '"' : '') + ' sandbox="allow-scripts" srcdoc="' + escapeHtml(proposalDocument(page, mode)) + '"></iframe>';
     }
 
     function number(value, fallback = 0) {
@@ -368,6 +409,270 @@
       });
       return document;
     }
+
+    const CONTEXT_LABELS = { 'internal-tool': 'Herramienta interna', 'product-ui': 'Producto', 'marketing': 'Marketing', 'client-deliverable': 'Entrega a cliente', 'other': 'Otro' };
+    const REGISTER_LABELS = { formal: 'formal', neutral: 'neutro', expressive: 'expresivo' };
+    const ELEMENT_STYLE_FIELDS = [
+      { property: 'color', label: 'Texto', kind: 'color' },
+      { property: 'background-color', label: 'Fondo', kind: 'color' },
+      { property: 'font-size', label: 'Tamano', kind: 'px' },
+      { property: 'font-weight', label: 'Grosor', kind: 'number' },
+      { property: 'letter-spacing', label: 'Tracking', kind: 'text' },
+      { property: 'line-height', label: 'Interlineado', kind: 'text' },
+      { property: 'text-align', label: 'Alineacion', kind: 'select', options: ['left', 'center', 'right', 'justify'] },
+      { property: 'padding', label: 'Relleno', kind: 'text' },
+      { property: 'margin', label: 'Margen', kind: 'text' },
+      { property: 'gap', label: 'Separacion', kind: 'text' },
+      { property: 'border-radius', label: 'Radio', kind: 'text' },
+      { property: 'max-width', label: 'Ancho max.', kind: 'text' },
+      { property: 'opacity', label: 'Opacidad', kind: 'number' },
+    ];
+
+    function pageOverrides(page) {
+      if (!page) return [];
+      if (!Array.isArray(page.overrides)) page.overrides = [];
+      return page.overrides;
+    }
+
+    function storeOverride(override) {
+      const page = currentPage();
+      if (!page || !override || typeof override.path !== 'string') return;
+      const list = pageOverrides(page);
+      const index = list.findIndex((item) => item.path === override.path);
+      const meaningful = override.move || override.style || typeof override.text === 'string' || override.hidden || override.copies;
+      if (!meaningful) { if (index >= 0) list.splice(index, 1); return; }
+      if (index >= 0) list[index] = override;
+      else list.push(override);
+    }
+
+    function activeFrame() {
+      return artboard.querySelector('iframe[data-frame-page]');
+    }
+
+    function sendToFrame(message) {
+      const frame = activeFrame();
+      if (!frame || !frame.contentWindow) return;
+      frame.contentWindow.postMessage(Object.assign({ source: 'design-editor' }, message), '*');
+    }
+
+    // Remounting the frame reloads the proposal and loses scroll position, so it
+    // only happens when the page or the mode actually changes.
+    function mountFrame(page, mode) {
+      if (state.framePageId === page.id && state.frameMode === mode && activeFrame()) return;
+      state.framePageId = page.id;
+      state.frameMode = mode;
+      state.element = null;
+      artboard.innerHTML = proposalFrame(page, mode);
+    }
+
+    function syncFrameOverrides() {
+      const page = currentPage();
+      if (!page || !page.html) return;
+      sendToFrame({ type: 'apply-all', overrides: pageOverrides(page) });
+    }
+
+    function captureHistoryThrottled() {
+      const now = Date.now();
+      if (now - state.lastHistoryAt < 600) return;
+      state.lastHistoryAt = now;
+      captureHistory();
+    }
+
+    function colorHex(value) {
+      const text = String(value || '').trim();
+      if (/^#[0-9a-f]{6}$/i.test(text)) return text.toLowerCase();
+      if (/^#[0-9a-f]{3}$/i.test(text)) return '#' + text.slice(1).split('').map((character) => character + character).join('').toLowerCase();
+      const match = text.match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/i);
+      if (!match) return '#ffffff';
+      return '#' + [match[1], match[2], match[3]].map((channel) => Math.max(0, Math.min(255, Math.round(Number(channel)))).toString(16).padStart(2, '0')).join('');
+    }
+
+    function cssNumber(value) {
+      const parsed = Number.parseFloat(String(value || ''));
+      return Number.isFinite(parsed) ? Math.round(parsed * 100) / 100 : '';
+    }
+
+    function elementStyleValue(property) {
+      const element = state.element;
+      if (!element) return '';
+      const override = element.override || {};
+      const overridden = override.style ? override.style[property] : undefined;
+      if (overridden !== undefined && overridden !== null) return String(overridden);
+      return String((element.props || {})[property] || '');
+    }
+
+    function styleField(field) {
+      const raw = elementStyleValue(field.property);
+      const override = (state.element && state.element.override && state.element.override.style) || {};
+      const marked = Object.prototype.hasOwnProperty.call(override, field.property);
+      const identifier = 'style-' + field.property;
+      const attributes = 'id="' + identifier + '" data-style-field="' + field.property + '" data-style-kind="' + field.kind + '"';
+      let control;
+      if (field.kind === 'color') control = '<input ' + attributes + ' type="color" value="' + escapeHtml(colorHex(raw)) + '">';
+      else if (field.kind === 'px') control = '<input ' + attributes + ' type="number" value="' + escapeHtml(String(cssNumber(raw))) + '">';
+      else if (field.kind === 'number') control = '<input ' + attributes + ' type="number" step="0.05" value="' + escapeHtml(String(cssNumber(raw))) + '">';
+      else if (field.kind === 'select') control = '<select ' + attributes + '>' + field.options.map((option) => '<option' + (raw === option ? ' selected' : '') + '>' + option + '</option>').join('') + '</select>';
+      else control = '<input ' + attributes + ' type="text" value="' + escapeHtml(raw) + '">';
+      return '<div class="field"><label for="' + identifier + '">' + field.label + (marked ? ' *' : '') + '</label>' + control + '</div>';
+    }
+
+    function renderEditList() {
+      const list = pageOverrides(currentPage());
+      const heading = '<div class="section-heading"><span>Ajustes manuales</span><span>' + list.length + '</span></div>';
+      if (!list.length) {
+        return '<section class="inspector-section">' + heading + '<div class="hint">Todavia no has movido ni editado nada. Cada cambio queda como una capa sobre el diseno, no reescribe el HTML y se puede revertir por separado.</div></section>';
+      }
+      const items = list.map((item) => {
+        const kinds = [];
+        if (item.move) kinds.push('movido');
+        if (item.style) kinds.push('estilo');
+        if (typeof item.text === 'string') kinds.push('texto');
+        if (item.hidden) kinds.push('oculto');
+        if (item.copies) kinds.push('x' + (item.copies + 1));
+        const current = state.element && state.element.path === item.path ? ' current' : '';
+        return '<div class="edit-item' + current + '"><span class="edit-item-label">' + escapeHtml(item.label || item.path) + '</span><span class="edit-item-kind">' + escapeHtml(kinds.join(' / ')) + '</span><button data-edit-select="' + escapeHtml(item.path) + '" type="button">Ver</button><button data-edit-reset="' + escapeHtml(item.path) + '" type="button">Quitar</button></div>';
+      }).join('');
+      return '<section class="inspector-section">' + heading + '<div class="edit-list">' + items + '</div></section>';
+    }
+
+    function renderElementInspector() {
+      const element = state.element;
+      document.querySelector('.app').classList.toggle('inspector-open', Boolean(state.inspectorOpen));
+      const focused = document.activeElement;
+      const focusKey = focused && inspector.contains(focused) ? (focused.dataset.styleField || focused.dataset.elementField || null) : null;
+      const caret = focused && typeof focused.selectionStart === 'number' ? [focused.selectionStart, focused.selectionEnd] : null;
+      if (!element) {
+        inspector.innerHTML = '<div class="empty-inspector">Haz clic en cualquier elemento del diseno para seleccionarlo. Arrastra para moverlo, doble clic para editar su texto y usa las flechas para ajustarlo pixel a pixel.</div>' + renderEditList();
+        return;
+      }
+      const override = element.override || {};
+      const move = override.move || { x: 0, y: 0 };
+      const textValue = typeof override.text === 'string' ? override.text : String(element.text || '');
+      const textSection = element.textEditable
+        ? '<section class="inspector-section"><div class="field-grid"><div class="field full"><label for="element-text">Texto</label><textarea id="element-text" data-element-field="text" spellcheck="true">' + escapeHtml(textValue) + '</textarea></div></div></section>'
+        : '';
+      inspector.innerHTML = '<h2 class="inspector-title">' + escapeHtml(element.label) + '</h2><p class="inspector-subtitle">' + escapeHtml(element.tag) + (override.hidden ? ' / oculto' : '') + (override.copies ? ' / ' + (override.copies + 1) + ' copias' : '') + '</p>'
+        + textSection
+        + '<section class="inspector-section"><div class="section-heading"><span>Desplazamiento</span></div><div class="field-grid">'
+        + '<div class="field"><label for="element-move-x">X</label><input id="element-move-x" data-element-field="moveX" type="number" value="' + escapeHtml(String(Math.round(Number(move.x) || 0))) + '"></div>'
+        + '<div class="field"><label for="element-move-y">Y</label><input id="element-move-y" data-element-field="moveY" type="number" value="' + escapeHtml(String(Math.round(Number(move.y) || 0))) + '"></div>'
+        + '</div><div class="hint">El desplazamiento se aplica como translate, asi que el resto de la composicion no se recoloca. Al arrastrar aparecen guias cuando el borde o el centro del elemento coincide con los de otro; manten Alt pulsado para ignorarlas.</div></section>'
+        + '<section class="inspector-section"><div class="section-heading"><span>Apariencia y espaciado</span></div><div class="field-grid">' + ELEMENT_STYLE_FIELDS.map(styleField).join('') + '</div><div class="hint">Deja un campo vacio para devolver esa propiedad al CSS de la propuesta.</div></section>'
+        + '<section class="inspector-section"><div class="inspector-actions"><button class="top-button" data-element-action="duplicate" type="button">Duplicar</button><button class="top-button" data-element-action="hide" type="button">' + (override.hidden ? 'Mostrar' : 'Ocultar') + '</button><button class="top-button danger" data-element-action="reset" type="button">Restablecer</button></div></section>'
+        + renderEditList();
+      if (focusKey) {
+        const next = inspector.querySelector('[data-style-field="' + focusKey + '"], [data-element-field="' + focusKey + '"]');
+        if (next) {
+          next.focus();
+          if (caret && typeof next.selectionStart === 'number') {
+            try { next.setSelectionRange(caret[0], caret[1]); } catch (error) { /* the field type may not support selection */ }
+          }
+        }
+      }
+    }
+
+    function updateEditingChrome() {
+      const page = currentPage();
+      const htmlProposal = Boolean(page && page.html);
+      const editable = htmlProposal && !state.overview;
+      const count = editable ? pageOverrides(page).length : 0;
+      document.getElementById('node-tools').hidden = htmlProposal;
+      document.getElementById('element-tools').hidden = !editable;
+      document.getElementById('canvas-hint').hidden = !editable;
+      document.getElementById('edit-count').textContent = String(count);
+      document.getElementById('hide-element-button').textContent = state.element && state.element.override && state.element.override.hidden ? 'Mostrar' : 'Ocultar';
+      ['duplicate-element-button', 'hide-element-button', 'reset-element-button'].forEach((identifier) => { document.getElementById(identifier).disabled = !state.element; });
+      document.getElementById('reset-all-button').disabled = count === 0;
+      const chip = document.getElementById('brief-chip');
+      const intake = state.document && state.document.intake;
+      if (!intake) { chip.hidden = true; chip.innerHTML = ''; return; }
+      chip.hidden = false;
+      chip.innerHTML = '<strong>' + escapeHtml(CONTEXT_LABELS[intake.context] || intake.context) + '</strong><span>' + escapeHtml((REGISTER_LABELS[intake.register] || intake.register) + ' / ' + intake.audience) + '</span>';
+      chip.title = [intake.surface, intake.primaryAction, intake.constraints.join('; '), intake.outOfScope.length ? 'Fuera de alcance: ' + intake.outOfScope.join('; ') : ''].filter(Boolean).join('\n');
+    }
+
+    function renderElementPanels() {
+      updateEditingChrome();
+      renderInspector();
+    }
+
+    function patchElement(patch) {
+      if (!state.element) return;
+      captureHistoryThrottled();
+      sendToFrame(Object.assign({ type: 'patch', path: state.element.path }, patch));
+    }
+
+    function applyStyleField(input) {
+      const property = input.dataset.styleField;
+      const kind = input.dataset.styleKind;
+      const raw = String(input.value || '').trim();
+      let value = raw;
+      if (!raw) value = null;
+      else if (kind === 'px') {
+        const parsed = Number(raw);
+        if (!Number.isFinite(parsed)) return;
+        value = parsed + 'px';
+      }
+      patchElement({ style: { [property]: value } });
+    }
+
+    function applyElementField(input) {
+      const field = input.dataset.elementField;
+      if (field === 'text') { patchElement({ text: input.value }); return; }
+      if (field !== 'moveX' && field !== 'moveY') return;
+      const current = (state.element.override && state.element.override.move) || { x: 0, y: 0 };
+      const value = Number(input.value);
+      if (!Number.isFinite(value)) return;
+      const move = { x: Number(current.x) || 0, y: Number(current.y) || 0 };
+      if (field === 'moveX') move.x = Math.round(value);
+      else move.y = Math.round(value);
+      patchElement({ move });
+    }
+
+    function duplicateElement() { if (state.element) patchElement({ copies: ((state.element.override && state.element.override.copies) || 0) + 1 }); }
+    function toggleElementHidden() { if (state.element) patchElement({ hidden: !(state.element.override && state.element.override.hidden) }); }
+    function resetElement() { if (state.element) { captureHistory(); sendToFrame({ type: 'reset', path: state.element.path }); } }
+    function resetAllElements() { captureHistory(); sendToFrame({ type: 'reset' }); }
+
+    window.addEventListener('message', (event) => {
+      const frame = activeFrame();
+      if (!frame || event.source !== frame.contentWindow) return;
+      const data = event.data;
+      if (!data || data.source !== 'design-canvas') return;
+      if (data.type === 'ready') { syncFrameOverrides(); return; }
+      if (data.type === 'select') {
+        state.element = { path: data.path, label: data.label, tag: data.tag, textEditable: data.textEditable, text: data.text, props: data.props, override: data.override || { path: data.path } };
+        state.selectedId = null;
+        state.inspectorOpen = true;
+        renderElementPanels();
+        return;
+      }
+      if (data.type === 'deselect') { state.element = null; renderElementPanels(); return; }
+      if (data.type === 'moving') {
+        const snapped = Array.isArray(data.snapped) && data.snapped.length ? ' / alineado: ' + data.snapped.map((entry) => String(entry).split(':')[1]).join(' + ') : '';
+        setStatus('Moviendo ' + data.move.x + ', ' + data.move.y + snapped);
+        return;
+      }
+      if (data.type === 'change') {
+        captureHistoryThrottled();
+        storeOverride(data.override);
+        if (state.element && state.element.path === data.override.path) state.element.override = data.override;
+        renderElementPanels();
+        queueSave();
+        return;
+      }
+      if (data.type === 'reset') {
+        const page = currentPage();
+        if (page) page.overrides = data.path ? pageOverrides(page).filter((item) => item.path !== data.path) : [];
+        if (state.element && (!data.path || state.element.path === data.path)) state.element.override = { path: state.element.path };
+        renderElementPanels();
+        queueSave();
+        return;
+      }
+      if (data.type === 'hint') { setStatus(data.message); return; }
+      if (data.type === 'undo') { undo(); return; }
+      if (data.type === 'redo') { redo(); }
+    });
 
     function renderPages() {
       if (!state.document) return;
@@ -406,6 +711,9 @@
       if (!response.ok) throw new Error('Could not load design document');
       state.document = hydrateDocument(await response.json());
       state.overview = state.document.pages.length > 1;
+      state.framePageId = null;
+      state.frameMode = null;
+      state.element = null;
       state.selectedId = null;
       state.history = [];
       state.future = [];
@@ -435,6 +743,8 @@
       state.document = hydrateDocument(JSON.parse(state.history.pop()));
       if (!state.document.nodes.some((node) => node.id === state.selectedId)) state.selectedId = null;
       render();
+      syncFrameOverrides();
+      renderElementPanels();
       saveDocument();
     }
 
@@ -444,6 +754,8 @@
       state.document = hydrateDocument(JSON.parse(state.future.pop()));
       if (!state.document.nodes.some((node) => node.id === state.selectedId)) state.selectedId = null;
       render();
+      syncFrameOverrides();
+      renderElementPanels();
       saveDocument();
     }
 
@@ -457,6 +769,14 @@
     }
 
     function openPlayPreview() {
+      const page = currentPage();
+      if (!state.overview && page && page.html) {
+        const stage = document.getElementById('play-stage');
+        stage.innerHTML = '<div class="artboard" style="width:' + page.viewport.width + 'px;height:' + page.viewport.height + 'px;background:' + safeColor(page.background, '#ffffff') + '">' + proposalFrame(page, 'apply') + '</div>';
+        document.getElementById('play-overlay').hidden = false;
+        document.getElementById('close-play-button').focus();
+        return;
+      }
       const preview = artboard.cloneNode(true);
       preview.querySelectorAll('.selection-popover, .note-pin').forEach((element) => element.remove());
       preview.querySelectorAll('.node').forEach((element) => { element.classList.remove('selected'); element.removeAttribute('tabindex'); });
@@ -472,6 +792,8 @@
 
     function renderOverview() {
       const pages = state.document.pages;
+      state.framePageId = null;
+      state.frameMode = null;
       const scale = 1;
       const canvasScroll = document.getElementById('canvas-scroll');
       const frameHeight = Math.max(520, canvasScroll.clientHeight - 86);
@@ -489,7 +811,7 @@
       artboardChrome.style.marginLeft = `${centeredMargin}px`;
       artboard.innerHTML = pages.map((page, index) => {
         const frameWidth = page.viewport.width;
-        const content = page.html ? proposalFrame(page) : page.nodes.map(renderNode).join('');
+        const content = page.html ? proposalFrame(page, 'apply') : page.nodes.map(renderNode).join('');
         const preview = '<div class="overview-preview" style="width:' + page.viewport.width + 'px;height:' + frameHeight + 'px;transform:scale(' + scale + ');background:' + safeColor(page.background, '#ffffff') + '">' + content + '</div>';
         return '<article class="overview-item" data-overview-page-id="' + escapeHtml(page.id) + '" style="width:' + frameWidth + 'px"><div class="overview-label"><strong>' + escapeHtml(page.name) + '</strong><div class="overview-meta"><span>' + (index + 1) + ' / ' + pages.length + '</span><button class="overview-open" data-overview-open="' + escapeHtml(page.id) + '" type="button">Open</button></div></div><div class="overview-frame" style="width:' + frameWidth + 'px;height:' + frameHeight + 'px">' + preview + '</div></article>';
       }).join('');
@@ -505,6 +827,7 @@
       if (state.overview && state.document.pages.length > 1) {
         renderOverview();
         document.querySelector('.app').classList.remove('inspector-open');
+        updateEditingChrome();
         layerList.innerHTML = '';
         inspector.innerHTML = '<div class="empty-inspector">Choose a proposal in the overview to edit it.</div>';
         notesList.innerHTML = '';
@@ -524,12 +847,16 @@
       artboard.style.transform = 'scale(' + state.zoom + ')';
       artboard.style.marginBottom = (state.document.viewport.height * (state.zoom - 1)) + 'px';
       if (currentPage()?.html) {
-        artboard.innerHTML = proposalFrame(currentPage());
+        mountFrame(currentPage(), 'edit');
       } else {
+        state.framePageId = null;
+        state.frameMode = null;
+        state.element = null;
         artboard.innerHTML = state.document.nodes.map(renderNode).join('') + state.document.notes.map(renderNotePin).join('') + renderGuides() + renderSelectionPopover();
       }
       canvasTitleInput.value = state.document.name;
       renderLayers();
+      updateEditingChrome();
       renderInspector();
       renderNotes();
       const approved = state.document.approvedPageId === state.document.activePageId;
@@ -628,6 +955,8 @@
     }
 
     function renderInspector() {
+      const page = currentPage();
+      if (page && page.html && !state.overview) { renderElementInspector(); return; }
       const node = selectedNode();
       document.querySelector('.app').classList.toggle('inspector-open', Boolean(node && state.inspectorOpen));
       if (!node) { inspector.innerHTML = '<div class="empty-inspector">Select an element on the canvas to inspect its properties.</div>'; return; }
@@ -641,7 +970,7 @@
     function renderNotes() {
       const notes = state.document.notes;
       document.getElementById('note-count').textContent = String(notes.length);
-      notesList.innerHTML = notes.length ? notes.map((note, index) => { const node = state.document.nodes.find((item) => item.id === note.nodeId); return '<div class="note"><div class="note-target">' + (index + 1) + ' / ' + escapeHtml(node?.name ?? 'Canvas') + '</div><div class="note-copy">' + escapeHtml(note.text) + '</div></div>'; }).join('') : '<div class="hint">No notes yet. Select a layer and add the first one.</div>';
+      notesList.innerHTML = notes.length ? notes.map((note, index) => { const node = state.document.nodes.find((item) => item.id === note.nodeId); return '<div class="note"><div class="note-target">' + (index + 1) + ' / ' + escapeHtml(note.label ?? node?.name ?? 'Canvas') + '</div><div class="note-copy">' + escapeHtml(note.text) + '</div></div>'; }).join('') : '<div class="hint">No notes yet. Select a layer and add the first one.</div>';
     }
 
     function commitTextEditing() {
@@ -765,8 +1094,34 @@
     artboard.addEventListener('pointercancel', () => { state.dragging = null; state.guides = []; render(); });
     layerList.addEventListener('click', (event) => { const layer = event.target.closest('[data-layer-id]'); if (layer) { state.selectedId = layer.dataset.layerId; render(); } });
     pagesList.addEventListener('click', (event) => { const page = event.target.closest('[data-page-id]'); if (!page || !state.document || page.dataset.pageId === state.document.activePageId) return; captureHistory(); state.document.activePageId = page.dataset.pageId; state.selectedId = null; state.editingId = null; state.editingNoteId = null; state.inspectorOpen = false; state.overview = false; pagesMenu.hidden = true; pagesButton.setAttribute('aria-expanded', 'false'); render(); queueSave(); });
-    inspector.addEventListener('input', (event) => { const input = event.target.closest('[data-field]'); if (input) updateSelected(input.dataset.field, input.value); });
-    inspector.addEventListener('click', (event) => { if (event.target.closest('#duplicate-button')) duplicateSelected(); if (event.target.closest('#delete-button')) deleteSelected(); });
+    inspector.addEventListener('input', (event) => {
+      const styleInput = event.target.closest('[data-style-field]');
+      if (styleInput) { applyStyleField(styleInput); return; }
+      const elementInput = event.target.closest('[data-element-field]');
+      if (elementInput) { applyElementField(elementInput); return; }
+      const input = event.target.closest('[data-field]');
+      if (input) updateSelected(input.dataset.field, input.value);
+    });
+    inspector.addEventListener('change', (event) => { const select = event.target.closest('select[data-style-field]'); if (select) applyStyleField(select); });
+    inspector.addEventListener('click', (event) => {
+      const action = event.target.closest('[data-element-action]');
+      if (action) {
+        if (action.dataset.elementAction === 'duplicate') duplicateElement();
+        if (action.dataset.elementAction === 'hide') toggleElementHidden();
+        if (action.dataset.elementAction === 'reset') resetElement();
+        return;
+      }
+      const pick = event.target.closest('[data-edit-select]');
+      if (pick) { sendToFrame({ type: 'select', path: pick.dataset.editSelect }); return; }
+      const drop = event.target.closest('[data-edit-reset]');
+      if (drop) { captureHistory(); sendToFrame({ type: 'reset', path: drop.dataset.editReset }); return; }
+      if (event.target.closest('#duplicate-button')) duplicateSelected();
+      if (event.target.closest('#delete-button')) deleteSelected();
+    });
+    document.getElementById('duplicate-element-button').addEventListener('click', duplicateElement);
+    document.getElementById('hide-element-button').addEventListener('click', toggleElementHidden);
+    document.getElementById('reset-element-button').addEventListener('click', resetElement);
+    document.getElementById('reset-all-button').addEventListener('click', resetAllElements);
     undoButton.addEventListener('click', undo);
     redoButton.addEventListener('click', redo);
     pagesButton.addEventListener('click', () => { const open = pagesMenu.hidden; pagesMenu.hidden = !open; pagesButton.setAttribute('aria-expanded', String(open)); });
@@ -781,14 +1136,14 @@
     document.getElementById('add-node-button').addEventListener('click', () => addNode('text'));
     document.getElementById('add-text-button').addEventListener('click', () => addNode('text'));
     document.getElementById('add-card-button').addEventListener('click', () => addNode('card'));
-    document.getElementById('note-tool').addEventListener('click', () => { if (!state.selectedId) return; state.inspectorOpen = true; render(); document.getElementById('note-input').focus(); document.getElementById('note-input').scrollIntoView({ behavior: 'smooth', block: 'center' }); });
+    document.getElementById('note-tool').addEventListener('click', () => { if (!state.selectedId && !state.element) return; state.inspectorOpen = true; render(); document.getElementById('note-input').focus(); document.getElementById('note-input').scrollIntoView({ behavior: 'smooth', block: 'center' }); });
     document.getElementById('close-inspector').addEventListener('click', () => { state.inspectorOpen = false; render(); });
     document.getElementById('zoom-select').addEventListener('change', (event) => { state.zoom = number(event.target.value, 1); render(); });
     document.getElementById('save-button').addEventListener('click', saveDocument);
     document.getElementById('export-button').addEventListener('click', exportDocument);
     document.getElementById('approve-button').addEventListener('click', () => { if (!state.document) return; captureHistory(); state.document.approvedPageId = state.document.activePageId; render(); queueSave(); setStatus('Proposal approved'); });
-    document.getElementById('add-note-button').addEventListener('click', () => { const input = document.getElementById('note-input'); const text = input.value.trim(); if (!text) return; captureHistory(); state.document.notes.push({ id: 'note-' + Date.now(), nodeId: state.selectedId, text }); input.value = ''; render(); queueSave(); });
-    document.addEventListener('keydown', (event) => { if ((event.key === 'Delete' || event.key === 'Backspace') && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) deleteSelected(); if (event.key === 'Escape') { if (!document.getElementById('play-overlay').hidden) closePlayPreview(); else if (state.editingId) { commitTextEditing(); render(); } else if (state.editingNoteId) { commitNoteEditing(); render(); } else { state.selectedId = null; state.inspectorOpen = false; render(); } } if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); event.shiftKey ? redo() : undo(); } });
+    document.getElementById('add-note-button').addEventListener('click', () => { const input = document.getElementById('note-input'); const text = input.value.trim(); if (!text) return; captureHistory(); state.document.notes.push({ id: 'note-' + Date.now(), nodeId: state.selectedId, label: state.element ? state.element.label : undefined, text }); input.value = ''; render(); queueSave(); });
+    document.addEventListener('keydown', (event) => { const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName); if ((event.key === 'Delete' || event.key === 'Backspace') && !typing) { if (state.element) toggleElementHidden(); else deleteSelected(); } if (event.key === 'Escape') { if (!document.getElementById('play-overlay').hidden) closePlayPreview(); else if (state.editingId) { commitTextEditing(); render(); } else if (state.element) { sendToFrame({ type: 'deselect' }); state.element = null; renderElementPanels(); } else if (state.editingNoteId) { commitNoteEditing(); render(); } else { state.selectedId = null; state.inspectorOpen = false; render(); } } if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); event.shiftKey ? redo() : undo(); } });
 
     loadDocument().catch((error) => { setStatus(error.message, true); inspector.innerHTML = '<div class="empty-inspector">The local design server could not load this canvas. Reload the page after restarting the command.</div>'; });
   </script>

@@ -77,16 +77,24 @@ export const DesignCanvasPlugin: Plugin = async ({ $, worktree }) => {
         },
       }),
       design_get: tool({
-        description: "Read the latest design document saved by the local interactive canvas.",
+        description:
+          "Read the latest design document saved by the local interactive canvas, including the intake answers and the overrides the user applied by hand to each proposal.",
         args: {},
         async execute() {
           const document = await getDesignDocument(worktree)
+          const approvedPage = document.pages.find((page) => page.id === document.approvedPageId) ?? null
+          const overrides = approvedPage?.overrides ?? []
+          const note = overrides.length
+            ? `\n\nThe user adjusted ${overrides.length} element${overrides.length === 1 ? "" : "s"} of the approved proposal in the canvas. Those overrides are decisions, not noise: fold each move, text change, style change, hidden element and duplicate into the implementation.`
+            : ""
           return {
             title: "Current design document",
-            output: JSON.stringify(document, null, 2),
+            output: `${JSON.stringify(document, null, 2)}${note}`,
             metadata: {
               document,
-              approvedPage: document.pages.find((page) => page.id === document.approvedPageId) ?? null,
+              approvedPage,
+              intake: document.intake ?? null,
+              overrides,
             },
           }
         },
@@ -287,7 +295,7 @@ export const DesignCanvasPlugin: Plugin = async ({ $, worktree }) => {
           const server = await openCanvas(document.brief)
           return {
             title: "Design proposals presented",
-            output: `Canvas: ${server.url}\nAll three proposals are ready in Overview.`,
+            output: `Canvas: ${server.url}\nAll three proposals are ready in Overview. The user can open one and edit it directly: click any element to select it, drag to move it, double click to retype it, and adjust colors and spacing in the properties panel. Read those adjustments back with design_get before implementing.`,
             metadata: { url: server.url, documentPath: server.documentPath },
           }
         },
