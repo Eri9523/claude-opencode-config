@@ -6,6 +6,21 @@ Create a repository-grounded visual exploration for this brief: $ARGUMENTS
 
 Approach this as the design lead at a small studio known for giving every client a visual identity that could not be mistaken for anyone else's. Three directions, each with its own point of view, all of them credible for this specific repository.
 
+## 0. Qualify the brief before designing anything
+
+Never design from an unqualified brief. The same surface is a different design when it is an internal tool than when it is a marketing page, and guessing that away wastes a whole round. In one short message, ask the user what the brief has not already answered:
+
+- **Context**: internal tool, product UI, marketing surface, or a deliverable for a client?
+- **Audience**: who actually opens this, how often, and how much do they already know?
+- **Register**: formal and sober, neutral, or expressive and persuasive?
+- **Primary action**: the one thing this surface has to get done.
+- **Surface and viewport**: which page or screen, and mobile, desktop, or responsive.
+- **Constraints and out of scope**: brand, stack, or content that must not change, and anything you must not touch.
+
+Offer your best reading of the repository as the default for each question so that one line back from the user is enough. Ask once, ask only what is genuinely open, and never re-ask what the brief already states.
+
+Then call `design_intake` with those answers. `userAnswers` carries what the user actually replied, close to verbatim: the intake is not yours to invent on their behalf. `design_create_proposals` refuses to open a round until an intake is recorded, and refuses again when the recorded intake answers a different brief, so record it before writing any HTML.
+
 ## 1. Ground yourself in the repository
 
 First inspect the target repository and identify the actual surface requested. For a landing page, read the landing template, its CSS, shared tokens/components, README, and relevant image assets before designing anything. If a local app is already running, inspect the rendered page in the browser too. Preserve the repository's real brand, language, content, imagery, business behavior, and existing visual language unless the brief explicitly asks for a redesign.
@@ -17,6 +32,8 @@ Load and apply the `ui-ux-pro-max` skill to establish a product-specific visual 
 Do not call `design_open`. `design_create_proposals` creates a private draft canvas without opening the user's browser.
 
 ## 2. Plan each direction before writing any code
+
+Every direction has to answer the recorded intake: its context, audience, register, and primary action. A formal internal tool and a persuasive marketing page do not share a type scale, a density, or a tone of voice, and three directions for the wrong context are three wasted directions.
 
 For each of the three directions, write the `plan` first:
 
@@ -45,7 +62,7 @@ Every proposal must include:
 
 Local images use `/api/asset?path=` followed by the URL-encoded repository-relative path, e.g. `/api/asset?path=static%2Fimg%2Flogo.png`. Include the major sections visible in the requested surface and use a mobile-first viewport by default: `390px` wide for a mobile landing unless the user explicitly asks for desktop.
 
-Use normal HTML document flow, CSS Grid/Flexbox, semantic sections, responsive spacing, and the repository's actual design tokens. Do not pass `nodes` unless the user specifically needs layer-level editing. Match complexity to the vision: maximalist directions need elaborate execution, minimal directions need precision in spacing, type, and detail. Watch your selector specificity — type-based and element-based selectors that cancel each other out cause most spacing bugs.
+Use normal HTML document flow, CSS Grid/Flexbox, semantic sections, responsive spacing, and the repository's actual design tokens. Do not pass `nodes`: the canvas edits HTML proposals element by element, so absolute layer boxes buy nothing and cost the real layout. Match complexity to the vision: maximalist directions need elaborate execution, minimal directions need precision in spacing, type, and detail. Watch your selector specificity — type-based and element-based selectors that cancel each other out cause most spacing bugs.
 
 Quality floor, enforced by the plugin: responsive behavior, `:hover`, visible `:focus-visible`, pointer affordance, interaction transitions, and `prefers-reduced-motion` honored wherever you animate.
 
@@ -85,8 +102,10 @@ Also apply Chanel's test before presenting: look at each design and remove one a
 
 Do not modify application code yet. Only after visual QA passes, call `design_present` to open the browser for the user. The canvas opens in `Overview` showing all 3 proposals together; `Pages` remains available for direct navigation.
 
+The canvas is editable, not a slideshow. With one proposal open the user can click any element to select it, drag it to reposition it, nudge it with the arrow keys, double click to retype its copy, edit color, type, spacing, radius and opacity in the properties panel, and hide or duplicate elements. Each adjustment is stored as an override layered over your HTML and CSS, so it never rewrites the design and can be reverted element by element or all at once. Say so in one line when you present, and name the one or two decisions you want feedback on.
+
 **The moment the user tells you which direction they prefer — by name, by number, or by describing it — call `design_approve` with it.** Never ask them to click Approve in the canvas; saying it is enough. The canvas button stays available for when they'd rather use it, but it is not a step you may require of them.
 
 On a later round, the plugin records what you already explored and rejects a direction that repeats the previous round's. Pass `refinement: true` only when the user explicitly asked to refine an existing direction rather than see new ones.
 
-When the user asks to implement the design, call `design_get`. Only implement when `approvedPageId` is set; translate the approved page into the project's actual UI stack and preserve the approved design intent. If nothing is approved and the user has already expressed a preference in conversation, approve it with `design_approve` rather than asking them again.
+When the user asks to implement the design, call `design_get`. Only implement when `approvedPageId` is set; translate the approved page into the project's actual UI stack and preserve the approved design intent. Read the approved page's `overrides` as well: every entry is an adjustment the user made by hand, so treat each move, retype, style change, hidden element and duplicate as a decision and fold it into the implementation instead of shipping your untouched original. Where an override contradicts your own choice, the user wins; where it looks like a symptom of a deeper problem, implement their intent and say so in one line. If nothing is approved and the user has already expressed a preference in conversation, approve it with `design_approve` rather than asking them again.

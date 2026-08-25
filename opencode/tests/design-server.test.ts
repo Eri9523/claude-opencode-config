@@ -2,7 +2,7 @@ import { spawn } from "node:child_process"
 import { mkdtemp, mkdir, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { approveDesignPage, createDesignProposals, getDesignDocument, startDesignServer, validateDesignDocument, type DesignProposalInput } from "../plugins/design-server.ts"
+import { approveDesignPage, createDesignProposals, getDesignDocument, recordDesignIntake, sanitizeDesignOverrides, startDesignServer, validateDesignDocument, type DesignIntakeInput, type DesignProposalInput } from "../plugins/design-server.ts"
 
 type Variant = {
   name: string
@@ -251,6 +251,56 @@ async function run() {
     }
   }
 
+  const intake: DesignIntakeInput = {
+    brief,
+    context: "product-ui",
+    audience: "Compradores del catálogo que comparan medidas antes de encargar",
+    register: "neutral",
+    primaryAction: "Añadir la pieza a la cesta sin perder de vista el precio",
+    surface: "Ficha de producto del catálogo",
+    viewport: "mobile",
+    constraints: ["Se mantiene el precio 248,00 € del catálogo"],
+    outOfScope: ["El proceso de pago"],
+    userAnswers: ["Es la ficha pública del catálogo", "Tono neutro, ni corporativo ni de campaña"],
+  }
+
+  try {
+    await createDesignProposals(worktree, brief, round(), false, false)
+    fail("a round without a recorded intake is rejected", "was accepted")
+  } catch (error) {
+    if ((error as Error).message.includes("No design intake recorded")) pass("a round without a recorded intake is rejected")
+    else fail("a round without a recorded intake is rejected", (error as Error).message)
+  }
+
+  const expectIntakeReject = async (label: string, mutate: (input: DesignIntakeInput) => void, needle: string) => {
+    const candidate: DesignIntakeInput = JSON.parse(JSON.stringify(intake))
+    mutate(candidate)
+    try {
+      await recordDesignIntake(worktree, candidate)
+      fail(label, "was accepted but should have been rejected")
+    } catch (error) {
+      const message = (error as Error).message
+      if (message.toLowerCase().includes(needle.toLowerCase())) pass(label)
+      else fail(label, `rejected for the wrong reason: ${message}`)
+    }
+  }
+
+  await expectIntakeReject("an intake without the user's own answers is rejected", (input) => { input.userAnswers = [] }, "userAnswers")
+  await expectIntakeReject("a placeholder audience is rejected", (input) => { input.audience = "n/a" }, "audience")
+  await expectIntakeReject("a vague primary action is rejected", (input) => { input.primaryAction = "verlo" }, "primaryAction")
+
+  const recorded = await recordDesignIntake(worktree, intake)
+  if (recorded.intake?.audience === intake.audience && recorded.intake?.context === "product-ui") pass("the intake answers are stored on the design document")
+  else fail("the intake answers are stored on the design document", JSON.stringify(recorded.intake))
+
+  try {
+    await createDesignProposals(worktree, "Panel interno de facturación mensual para el equipo financiero", round(), false, true)
+    fail("a round for a different brief demands a fresh intake", "was accepted")
+  } catch (error) {
+    if ((error as Error).message.includes("answers a different brief")) pass("a round for a different brief demands a fresh intake")
+    else fail("a round for a different brief demands a fresh intake", (error as Error).message)
+  }
+
   const first = await expectOk("a complete round of three planned proposals is accepted", round())
   if (first) {
     if (first.pages.every((page) => page.plan && page.fonts?.length)) pass("plan and fonts are persisted on every page")
@@ -370,6 +420,55 @@ async function run() {
   const missing = await fetch(`${server.url}/api/preview?page=nope`)
   if (missing.status === 404) pass("the preview route rejects an unknown proposal id")
   else fail("the preview route rejects an unknown proposal id", `status ${missing.status}`)
+
+  if (previewHtml.includes("window.__design=") && previewHtml.includes("Design proposal runtime")) pass("the preview route embeds the frame runtime so saved edits are replayed")
+  else fail("the preview route embeds the frame runtime so saved edits are replayed", "no runtime found in the preview document")
+
+  const editorHtml = await fetch(`${server.url}/`).then((response) => response.text())
+  if (editorHtml.includes('id="iframe-runtime"') && editorHtml.includes("Design proposal runtime")) pass("the canvas ships the frame runtime it injects into each proposal")
+  else fail("the canvas ships the frame runtime it injects into each proposal", "the runtime placeholder was not replaced")
+
+  const direct = sanitizeDesignOverrides([
+    { path: "0.1", style: { color: "#112233; background:red", "font-size": "42px" } },
+    { path: "0.2", style: { position: "fixed" } },
+  ])
+  if (direct.length === 1 && direct[0].style && !direct[0].style.color && direct[0].style["font-size"] === "42px") pass("a css value carrying a second declaration is dropped")
+  else fail("a css value carrying a second declaration is dropped", JSON.stringify(direct))
+
+  const editable = await getDesignDocument(worktree)
+  const edited = JSON.parse(JSON.stringify(editable))
+  edited.intake = { ...editable.intake, audience: "quien controle el navegador" }
+  edited.pages[0].overrides = [
+    {
+      path: "0.1",
+      label: "h1.titulo",
+      move: { x: 12, y: -4 },
+      style: { "font-size": "42px", color: "#112233", "background-image": "url(https://example.invalid/pixel.png)" },
+      text: "Nuevo titular",
+    },
+    { path: "no-es-una-ruta", style: { color: "#000000" } },
+    { path: "0.2" },
+  ]
+  const savedResponse = await fetch(`${server.url}/api/document`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(edited),
+  })
+  const saved = await savedResponse.json()
+  const savedOverrides = saved.pages[0].overrides
+  if (savedOverrides.length === 1 && savedOverrides[0].path === "0.1") pass("only addressable overrides that change something are stored")
+  else fail("only addressable overrides that change something are stored", JSON.stringify(savedOverrides))
+  const savedStyle = savedOverrides[0]?.style ?? {}
+  if (savedStyle["font-size"] === "42px" && savedStyle.color === "#112233" && !savedStyle["background-image"]) pass("the override allowlist keeps type and color and drops remote assets")
+  else fail("the override allowlist keeps type and color and drops remote assets", JSON.stringify(savedStyle))
+  if (savedOverrides[0]?.move?.x === 12 && savedOverrides[0]?.text === "Nuevo titular") pass("a move and a retyped string survive the round trip")
+  else fail("a move and a retyped string survive the round trip", JSON.stringify(savedOverrides[0]))
+  if (saved.intake?.audience === intake.audience) pass("the canvas cannot rewrite the recorded intake")
+  else fail("the canvas cannot rewrite the recorded intake", JSON.stringify(saved.intake))
+
+  const previewWithEdits = await fetch(`${server.url}/api/preview?page=${encodeURIComponent(saved.pages[0].id)}`).then((response) => response.text())
+  if (previewWithEdits.includes('"font-size":"42px"') && previewWithEdits.includes("Nuevo titular")) pass("the preview carries the stored overrides into the screenshot")
+  else fail("the preview carries the stored overrides into the screenshot", "the override payload is missing from the preview")
 
   const shot = join(worktree, "shot.png")
   const screenshot = (channel: string[]) =>
