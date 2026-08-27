@@ -33,7 +33,6 @@ Use this file as a short routing layer. Load a dedicated skill or project spec w
 - `impeccable`: Use after the visual direction exists to shape, critique, audit, polish, harden, adapt, or optimize an implemented frontend; use it for bounded visual/browser review, not backend-only work.
 - `linear-task`: Load for Linear-related work. It contains the full workflow; ask permission before any `linear_*` MCP call.
 - `pull-request-quality`: Load before creating or updating a pull request; write descriptive English titles and bodies with summarized validation.
-- `beautiful-article`: Load to turn source material (notes, URLs, PDFs, transcripts, reports) into a polished, themed, single-file HTML article or report.
 
 ## UI
 
