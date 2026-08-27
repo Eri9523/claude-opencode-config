@@ -32,6 +32,7 @@ Use this file as a short routing layer. Load a dedicated skill when a task needs
 - Use Conventional Commits. Run `/commit` for the commit workflow.
 - Use an optional scope, imperative mood, and a subject under 72 characters.
 - Stage only files related to the commit.
+- When merging pull requests, use a normal merge commit. Never squash or rebase merge unless Sergio explicitly requests it.
 - Never push, reset, restore, checkout, stash, rebase, merge, or amend unless explicitly asked.
 
 ### GitHub identities
