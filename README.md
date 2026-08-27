@@ -13,6 +13,17 @@ Each proposal stays editable in that canvas: click an element to select it, drag
 
 Secrets are provided through environment variables and are intentionally not stored in this repository.
 
+## Plugins
+
+[ponytail](https://github.com/DietrichGebert/ponytail) trims generated code to the minimal sufficient implementation.
+
+- OpenCode: listed in `opencode/opencode.jsonc`'s `plugin` array (`@dietrichgebert/ponytail`).
+- Claude Code: install at user scope, since plugin installs are CLI-managed state, not files in this repo:
+  ```sh
+  claude plugin marketplace add DietrichGebert/ponytail
+  claude plugin install ponytail@ponytail
+  ```
+
 ## Credentials
 
 OpenCode reads these variables from the environment:
