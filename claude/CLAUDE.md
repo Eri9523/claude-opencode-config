@@ -19,6 +19,7 @@ Use this file as a short routing layer. Load a dedicated skill or project spec w
 
 - Never add a `Co-Authored-By: Claude ...` trailer or other Claude/Anthropic attribution.
 - Use Conventional Commits with an optional scope, imperative mood, and a subject under 72 characters.
+- When merging pull requests, use a normal merge commit. Never squash or rebase merge unless Sergio explicitly requests it.
 - Never push, reset, restore, checkout, stash, rebase, merge, or amend unless Sergio explicitly asks.
 
 ## Skills
