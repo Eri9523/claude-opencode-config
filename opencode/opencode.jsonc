@@ -3,6 +3,7 @@
 
   "model": "opencode-go/gpt-5.6-luna",
   "autoupdate": true,
+  "plugin": ["@dietrichgebert/ponytail"],
 
   "provider": {
     "anthropic": {
