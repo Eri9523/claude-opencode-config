@@ -30,6 +30,15 @@
         "ELEVENLABS_API_KEY": "${CLAUDE_ELEVENLABS_API_KEY}",
         "ELEVENLABS_API_RESIDENCY": "eu-residency"
       }
+    },
+    "gsc": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["mcp-search-console"],
+      "env": {
+        "GSC_CREDENTIALS_PATH": "${CLAUDE_GSC_CREDENTIALS_PATH}",
+        "GSC_SKIP_OAUTH": "true"
+      }
     }
   }
 }
