@@ -7,6 +7,10 @@ Personal configuration for Claude Code and OpenCode.
 - `claude/` contains Claude Code instructions and shared skills.
 - `opencode/` contains OpenCode configuration, agents, commands, plugins, and OpenCode-specific skills.
 
+The global SEO setup keeps its shared workflow in `claude/skills/seo`. Claude Code
+loads it directly, while OpenCode auto-discovers Claude skills and uses its own thin
+adapter in `opencode/agent/seo.md`.
+
 The global `/design` command asks the qualifying questions first (context, audience, register, primary action, surface), records them with `design_intake`, then generates three repository-grounded HTML/CSS proposals, validates visual evidence, contrast, affordance, and Nielsen heuristics, and presents them in a scrollable comparison canvas.
 
 Each proposal stays editable in that canvas: click an element to select it, drag or arrow-key it to move it, double click to retype it, and change color, type or spacing from the properties panel. Edits are stored as an override layer over the proposal's HTML/CSS — the design keeps its real layout and responsive behavior, every change can be reverted on its own, and the agent reads them back with `design_get` when implementing.
