@@ -48,7 +48,7 @@ export CLAUDE_GSC_CREDENTIALS_PATH="..."
 
 If the same ElevenLabs account is used by both tools, the two ElevenLabs variables can contain the same value. Put exports in `~/.zshrc` or another local secret manager, never in this repository.
 
-`*_GSC_CREDENTIALS_PATH` points to a Google service account JSON key (Search Console API), granted "Full" access on each property in Search Console. Keep the key file itself outside any repository (e.g. `~/.config/gcp-credentials/`).
+`*_GSC_CREDENTIALS_PATH` points to a Google service account JSON key, granted "Full" access on each property in Search Console. The same key is reused for the `analytics` server (GA4 Admin + Data API, read-only) — grant its `client_email` Viewer access on each GA4 property or account, and enable the Google Analytics Admin API and Google Analytics Data API on the key's GCP project. `analytics`'s `GOOGLE_PROJECT_ID` is that project's id, not a secret. Keep the key file itself outside any repository (e.g. `~/.config/gcp-credentials/`).
 
 `CLOUDFLARE_API_TOKEN` is read as-is (no per-tool prefix) by both tools — used with plain `curl` against the Cloudflare REST API, see the `cloudflare-api` skill for scope and usage.
 
