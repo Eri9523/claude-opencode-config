@@ -102,6 +102,14 @@
         "GSC_SKIP_OAUTH": "true"
       }
     },
+    "analytics": {
+      "type": "local",
+      "command": ["uvx", "analytics-mcp"],
+      "environment": {
+        "GOOGLE_APPLICATION_CREDENTIALS": "{env:OPENCODE_GSC_CREDENTIALS_PATH}",
+        "GOOGLE_PROJECT_ID": "your-gcp-project-id"
+      }
+    },
     "linear": {
       "type": "remote",
       "url": "https://mcp.linear.app/mcp"
