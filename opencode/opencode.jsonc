@@ -94,6 +94,14 @@
         "ELEVENLABS_API_RESIDENCY": "eu-residency"
       }
     },
+    "gsc": {
+      "type": "local",
+      "command": ["uvx", "mcp-search-console"],
+      "environment": {
+        "GSC_CREDENTIALS_PATH": "{env:OPENCODE_GSC_CREDENTIALS_PATH}",
+        "GSC_SKIP_OAUTH": "true"
+      }
+    },
     "linear": {
       "type": "remote",
       "url": "https://mcp.linear.app/mcp"

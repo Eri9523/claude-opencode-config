@@ -32,15 +32,21 @@ OpenCode reads these variables from the environment:
 export OPENCODE_ELEVENLABS_API_KEY="..."
 export OPENCODE_AIRTABLE_API_KEY="..."
 export LOGFIRE_API_KEY="..."
+export OPENCODE_GSC_CREDENTIALS_PATH="..."
 ```
 
 Claude Code's example MCP configuration uses:
 
 ```sh
 export CLAUDE_ELEVENLABS_API_KEY="..."
+export CLAUDE_GSC_CREDENTIALS_PATH="..."
 ```
 
 If the same ElevenLabs account is used by both tools, the two ElevenLabs variables can contain the same value. Put exports in `~/.zshrc` or another local secret manager, never in this repository.
+
+`*_GSC_CREDENTIALS_PATH` points to a Google service account JSON key (Search Console API), granted "Full" access on each property in Search Console. Keep the key file itself outside any repository (e.g. `~/.config/gcp-credentials/`).
+
+`CLOUDFLARE_API_TOKEN` is read as-is (no per-tool prefix) by both tools — used with plain `curl` against the Cloudflare REST API, see the `cloudflare-api` skill for scope and usage.
 
 Claude Code MCP template: `claude/mcp.json.example`.
 
