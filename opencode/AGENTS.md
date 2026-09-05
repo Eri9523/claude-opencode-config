@@ -53,11 +53,12 @@ Use this file as a short routing layer. Load a dedicated skill when a task needs
 - `converting-css-to-tailwind`: Load when migrating existing CSS selectors and stylesheets to Tailwind utilities.
 - `ui-ux-pro-max`: Use first for new frontend pages or projects to choose a product-specific visual system, palette, typography, UX guidance, and stack rules; persist the verified system when it will span multiple pages.
 - `impeccable`: Use after the visual direction exists to shape, critique, audit, polish, harden, adapt, or optimize an implemented frontend; use it for bounded visual/browser review, not backend-only work.
+- `laws-of-ux`: Load for UX psychology, cognitive load, choice architecture, interaction design, visual grouping, perceived performance, or psychology-grounded design reviews.
 - `linear-task`: Load for Linear-related work. It contains the full workflow; ask permission before any `linear_*` MCP call.
 - `pull-request-quality`: Load before creating or updating a pull request; write descriptive English titles and bodies with summarized validation.
 
 ## UI
 
-For frontend work, apply Nielsen's usability heuristics and consult `knowledge/design-patterns.md`.
+For frontend work, apply Nielsen's usability heuristics, relevant Laws of UX, and consult `knowledge/design-patterns.md`. Treat laws as context-sensitive heuristics, not absolute rules.
 
 For a new frontend surface, use `ui-ux-pro-max` first to establish the visual system, then use `impeccable` to review and refine the implementation. For an existing surface, start with `impeccable`; use focused `ui-ux-pro-max` searches only when a design-system decision is missing.
