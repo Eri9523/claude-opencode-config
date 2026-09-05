@@ -24,6 +24,7 @@ Use this file as a short routing layer. Load a dedicated skill or project spec w
 
 ## Skills
 
+- `seo`: Load for SEO audits, indexing issues, Search Console analysis, metadata, structured data, internal linking, Core Web Vitals, and organic-search recommendations.
 - `coding-guardrails`: TDD, validation, simplicity, and surgical changes.
 - `python-hexagonal-architecture`: Load for Python backend architecture, dependency injection, service boundaries, Protocol ports, adapters, or decorator-registered services and pipeline stages; it documents the `rauditor-backend-template` pattern.
 - `local-browser-testing`: Test local web apps through Playwright MCP; use for localhost UI verification, auth handoff, and responsive checks.

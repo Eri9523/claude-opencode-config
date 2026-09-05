@@ -221,6 +221,12 @@ python3 .opencode/skills/ui-ux-pro-max/scripts/search.py "atlantafx primer enter
 python3 .opencode/skills/ui-ux-pro-max/scripts/search.py "enterprise tableview density permission" --stack javafx
 ```
 
+### Brand-Anchored Style Recipes
+
+The style catalog above (`--domain style`) covers generic style *categories* (Minimalism, Neubrutalism, Glassmorphism, etc.). For a recipe anchored to one specific real brand or designer instead — with a concrete palette, typography, signature moves, and anti-patterns already worked out — read `references/style-recipes/INDEX.md` and the matching recipe file (e.g. `references/style-recipes/linear.md`, `stripe-press.md`, `aesop.md`). These are plain reference files, not part of the CSV/search pipeline.
+
+For a catalog of recurring AI-generated design failures to catch during review (templated section rhythm, default centered heroes, decorative trust theater, etc.), see `references/failure-patterns.md`.
+
 ---
 
 ## Example Workflow

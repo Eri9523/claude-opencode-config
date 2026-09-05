@@ -52,8 +52,6 @@
     },
     "external_directory": "allow",
     "bash": {
-      "git push": "deny",
-      "git push *": "deny",
       "sudo *": "deny",
       "rm -rf /": "deny",
       "rm -rf /*": "deny",
@@ -92,6 +90,22 @@
       "environment": {
         "ELEVENLABS_API_KEY": "{env:OPENCODE_ELEVENLABS_API_KEY}",
         "ELEVENLABS_API_RESIDENCY": "eu-residency"
+      }
+    },
+    "gsc": {
+      "type": "local",
+      "command": ["uvx", "mcp-search-console"],
+      "environment": {
+        "GSC_CREDENTIALS_PATH": "{env:OPENCODE_GSC_CREDENTIALS_PATH}",
+        "GSC_SKIP_OAUTH": "true"
+      }
+    },
+    "analytics": {
+      "type": "local",
+      "command": ["uvx", "analytics-mcp"],
+      "environment": {
+        "GOOGLE_APPLICATION_CREDENTIALS": "{env:OPENCODE_GSC_CREDENTIALS_PATH}",
+        "GOOGLE_PROJECT_ID": "your-gcp-project-id"
       }
     },
     "linear": {
