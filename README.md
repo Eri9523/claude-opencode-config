@@ -52,6 +52,19 @@ If the same ElevenLabs account is used by both tools, the two ElevenLabs variabl
 
 `CLOUDFLARE_API_TOKEN` is read as-is (no per-tool prefix) by both tools — used with plain `curl` against the Cloudflare REST API, see the `cloudflare-api` skill for scope and usage.
 
+## AWS
+
+The personal AWS account uses IAM Identity Center profile `personal`. The local
+`aws per` wrapper logs in through SSO and exports `AWS_PROFILE=personal`:
+
+```sh
+aws per
+aws sts get-caller-identity
+```
+
+The profile and SSO configuration stay in `~/.aws/config`; credentials are not
+stored in this repository.
+
 Claude Code MCP template: `claude/mcp.json.example`.
 
 Supabase, Linear, Context7, and other hosted Claude integrations normally use OAuth or plugin authentication and keep their sessions in Claude's local state.
