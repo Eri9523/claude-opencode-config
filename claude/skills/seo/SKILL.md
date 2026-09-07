@@ -15,7 +15,9 @@ of actionable findings over a generic checklist.
 2. Inspect rendered pages with browser automation when runtime behavior matters.
 3. Use Google Search Console for actual indexing and search-performance questions.
    List properties first and use the exact property URL returned by the tool.
-4. Consult current official documentation when a platform-specific claim needs
+4. For market-level search-interest questions with no site attached (is interest
+   in a term rising, where, what's related), use the `google-trends` skill.
+5. Consult current official documentation when a platform-specific claim needs
    confirmation.
 
 Clearly separate observed facts, data-backed conclusions, and hypotheses. Never
