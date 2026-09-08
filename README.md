@@ -28,6 +28,15 @@ Secrets are provided through environment variables and are intentionally not sto
   claude plugin install ponytail@ponytail
   ```
 
+[caveman](https://github.com/JuliusBrussee/caveman) compresses agent prose into terse, technically accurate output; pairs with ponytail (caveman shrinks what the agent says, ponytail shrinks what it builds).
+
+- OpenCode: has no publishable plugin package, so its integration is vendored as files — `opencode/plugins/caveman/` (referenced from `opencode.jsonc`'s `plugin` array as `./plugins/caveman/plugin.js`), `opencode/commands/caveman*.md`, `opencode/agents/cavecrew-*.md`, and `opencode/skills/{caveman*,cavecrew}/`. The always-on ruleset is appended between `<!-- caveman-begin -->`/`<!-- caveman-end -->` markers in `opencode/AGENTS.md`. To refresh from upstream: `node bin/install.js --only opencode` from a clone of the caveman repo, then copy the changed files back here.
+- Claude Code: install at user scope, same as ponytail:
+  ```sh
+  claude plugin marketplace add JuliusBrussee/caveman
+  claude plugin install caveman@caveman
+  ```
+
 ## Credentials
 
 OpenCode reads these variables from the environment:
