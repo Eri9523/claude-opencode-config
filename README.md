@@ -13,9 +13,22 @@ roots such as `~/.agents/skills` are intentionally excluded.
 Project-bound Claude `autoMode` context is also excluded because it can contain
 trusted paths, tunnel hosts, and policy derived from an unrelated workspace.
 
-The global SEO setup keeps its shared workflow in `claude/skills/seo`. Claude Code
-loads it directly, while OpenCode auto-discovers Claude skills and uses its own thin
-adapter in `opencode/agent/seo.md`.
+## Agent Model
+
+OpenCode keeps only `Build` and `Plan` visible. Build owns implementation and
+validation; Plan is the read-only thinking mode. A hidden read-only `Explore`
+worker handles broad discovery, and a hidden `Reviewer` provides an explicit
+second opinion. There is no general-purpose writer, orchestrator, review swarm,
+or automatic multi-agent pipeline.
+
+Repeatable delivery stays in explicit commands instead of agents:
+
+- `/commit`: validated local Conventional Commits.
+- `/release-dev`: commit, push, and open a PR to `develop` without merging.
+- `/release`: commit, merge a PR to `develop`, then promote through a PR to `main`.
+
+The global SEO workflow lives in `claude/skills/seo`; both clients load it as an
+on-demand skill rather than a dedicated agent.
 
 The global `/design` command asks the qualifying questions first (context, audience, register, primary action, surface), records them with `design_intake`, then generates three repository-grounded HTML/CSS proposals, validates visual evidence, contrast, affordance, and Nielsen heuristics, and presents them in a scrollable comparison canvas.
 
@@ -36,7 +49,7 @@ Secrets are provided through environment variables and are intentionally not sto
 
 [caveman](https://github.com/JuliusBrussee/caveman) compresses agent prose into terse, technically accurate output; pairs with ponytail (caveman shrinks what the agent says, ponytail shrinks what it builds).
 
-- OpenCode: has no publishable plugin package, so its integration is vendored as files — `opencode/plugins/caveman/` (referenced from `opencode.jsonc`'s `plugin` array as `./plugins/caveman/plugin.js`), `opencode/commands/caveman*.md`, `opencode/agents/cavecrew-*.md`, and `opencode/skills/{caveman*,cavecrew}/`. The always-on ruleset is appended between `<!-- caveman-begin -->`/`<!-- caveman-end -->` markers in `opencode/AGENTS.md`. To refresh from upstream: `node bin/install.js --only opencode` from a clone of the caveman repo, then copy the changed files back here.
+- OpenCode: has no publishable plugin package, so its integration is vendored as `opencode/plugins/caveman/`, `opencode/commands/caveman*.md`, and `opencode/skills/caveman*/`. Cavecrew agents are intentionally excluded from the minimal agent model.
 - Claude Code: install at user scope, same as ponytail:
   ```sh
   claude plugin marketplace add JuliusBrussee/caveman
