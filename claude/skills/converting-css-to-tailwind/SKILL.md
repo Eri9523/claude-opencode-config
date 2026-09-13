@@ -87,28 +87,27 @@ transition: all 0.2s ease-in-out;
 @keyframes spin { ... }
 animation: spin 1s linear infinite;
 ```
-→ `animate-spin` (built-in) or define in the project Tailwind theme
+→ `animate-spin` (built-in) or define in `tailwind.config`
 
 ### Custom Properties / Arbitrary Values
 
 For anything without a direct utility, use arbitrary values:
-
 - `w-[calc(100%-2rem)]`
 - `grid-cols-[200px_1fr_1fr]`
 - `text-[clamp(1rem,2vw,1.5rem)]`
 
 ## Handling Remaining CSS
 
-Some things cannot be expressed purely as utilities:
+Some things can't be expressed purely as utilities:
 
 - **Complex selectors** (`.parent > .child + .sibling`) — restructure the markup or use `@apply` as a last resort
-- **`@font-face`** — keep it in a global CSS file
-- **Complex `@keyframes`** — define them in the Tailwind v4 CSS theme or a global stylesheet
-- **CSS variables** — migrate them to `@theme` values when they are design tokens
+- **`@font-face`** — keep in a global CSS file or `globals.css`
+- **Complex `@keyframes`** — define in `tailwind.config.ts` under `theme.extend.keyframes`
+- **CSS variables** — migrate to Tailwind theme values in `tailwind.config.ts`
 
 ## Rules
 
-- Prefer semantic Tailwind classes over arbitrary hex values when a theme exists.
-- Do not use `@apply` to recreate the same CSS being migrated.
-- Group utilities logically: layout → spacing → typography → colors → effects.
-- If a component has 10+ utilities, consider extracting a reusable component rather than a CSS class.
+- Prefer semantic Tailwind classes (`bg-primary`) over arbitrary hex values when a theme exists
+- Don't use `@apply` to recreate the same CSS you're migrating away from — that defeats the purpose
+- Group related utilities logically: layout → spacing → typography → colors → effects
+- If a component has 10+ utilities, consider extracting a reusable component rather than a CSS class
