@@ -26,6 +26,8 @@ Repeatable delivery stays in explicit commands instead of agents:
 - `/commit`: validated local Conventional Commits.
 - `/release-dev`: commit, push, and open a PR to `develop` without merging.
 - `/release`: commit, merge a PR to `develop`, then promote through a PR to `main`.
+- `/affiliate-site`: initialize, adopt, advance, approve, or scale one affiliate-site phase.
+- `/affiliate-site-help`: show current state and the exact recommended next command.
 
 The global SEO workflow lives in `claude/skills/seo`; both clients load it as an
 on-demand skill rather than a dedicated agent.

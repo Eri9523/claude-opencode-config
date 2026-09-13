@@ -37,6 +37,7 @@
 - `seo`: SEO and Search Console work.
 - `linear-task`: Linear work; ask permission before any `linear_*` call.
 - `opencode-tooling`: OpenCode configuration, agents, commands, skills, plugins, permissions, and MCPs.
+- `affiliate-site`: gated creation, adoption, and controlled scaling of affiliate websites.
 
 ## Memory
 

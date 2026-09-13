@@ -29,6 +29,7 @@
 - `local-browser-testing`: local rendered UI verification.
 - `ui-ux-pro-max`: new visual systems. `impeccable`: existing interface refinement.
 - `laws-of-ux`: UX psychology. `seo`: SEO/Search Console. `linear-task`: Linear work with permission before calls.
+- `affiliate-site`: gated creation, adoption, and controlled scaling of affiliate websites.
 
 ## Memory
 
