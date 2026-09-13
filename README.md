@@ -7,6 +7,12 @@ Personal configuration for Claude Code and OpenCode.
 - `claude/` contains Claude Code instructions and shared skills.
 - `opencode/` contains OpenCode configuration, agents, commands, plugins, and OpenCode-specific skills.
 
+The repository mirrors the versioned portion of the active global configuration.
+Machine-local caches, backups, generated state, credentials, and external skill
+roots such as `~/.agents/skills` are intentionally excluded.
+Project-bound Claude `autoMode` context is also excluded because it can contain
+trusted paths, tunnel hosts, and policy derived from an unrelated workspace.
+
 The global SEO setup keeps its shared workflow in `claude/skills/seo`. Claude Code
 loads it directly, while OpenCode auto-discovers Claude skills and uses its own thin
 adapter in `opencode/agent/seo.md`.
