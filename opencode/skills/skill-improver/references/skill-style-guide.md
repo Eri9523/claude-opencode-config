@@ -54,13 +54,6 @@ Every `SKILL.md` MUST use this order unless a section is truly irrelevant:
 - Use `references/` for local docs that explain concepts or edge cases.
 - Keep references stable and relative to the skill directory when possible.
 
-## Registry Behavior
-
-- `gentle-ai skill-registry refresh` indexes skills; it does not summarize or rewrite them.
-- The registry records `name`, `description` trigger text, scope, and exact `SKILL.md` path.
-- Delegators pass matching paths to subagents, and subagents read the full skill before work.
-- Use `skill-improver` to audit and refactor existing skills against this guide.
-
 ## Quality Gates
 
 - Frontmatter is complete, quoted, single-line, and trigger-preserving.
