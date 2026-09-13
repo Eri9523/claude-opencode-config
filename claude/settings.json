@@ -4,5 +4,228 @@
     "pr": "",
     "sessionUrl": false
   },
-  "includeCoAuthoredBy": false
+  "includeCoAuthoredBy": false,
+  "permissions": {
+    "allow": [
+      "mcp__codegraph__codegraph_search",
+      "mcp__codegraph__codegraph_context",
+      "mcp__codegraph__codegraph_callers",
+      "mcp__codegraph__codegraph_callees",
+      "mcp__codegraph__codegraph_impact",
+      "mcp__codegraph__codegraph_node",
+      "mcp__codegraph__codegraph_status",
+      "mcp__supabase__list_projects",
+      "mcp__supabase__get_project",
+      "mcp__supabase__get_project_url",
+      "mcp__supabase__list_organizations",
+      "mcp__supabase__get_organization",
+      "mcp__supabase__list_tables",
+      "mcp__supabase__list_extensions",
+      "mcp__supabase__list_migrations",
+      "mcp__supabase__list_branches",
+      "mcp__supabase__list_edge_functions",
+      "mcp__supabase__get_edge_function",
+      "mcp__supabase__get_logs",
+      "mcp__supabase__get_advisors",
+      "mcp__supabase__get_cost",
+      "mcp__supabase__get_publishable_keys",
+      "mcp__supabase__generate_typescript_types",
+      "mcp__supabase__search_docs",
+      "Read",
+      "Glob",
+      "Grep",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(pwd)",
+      "Bash(cd *)",
+      "Bash(echo *)",
+      "Bash(which *)",
+      "Bash(tree *)",
+      "Bash(file *)",
+      "Bash(stat *)",
+      "Bash(wc *)",
+      "Bash(find *)",
+      "Bash(rg *)",
+      "Bash(grep *)",
+      "Bash(sort *)",
+      "Bash(uniq *)",
+      "Bash(cut *)",
+      "Bash(diff *)",
+      "Bash(sed *)",
+      "Bash(awk *)",
+      "Bash(jq *)",
+      "Bash(printenv *)",
+      "Bash(date *)",
+      "Bash(mkdir *)",
+      "Bash(touch *)",
+      "Bash(cp *)",
+      "Bash(mv *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git branch*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git fetch*)",
+      "Bash(git pull*)",
+      "Bash(git push)",
+      "Bash(git push origin*)",
+      "Bash(git stash*)",
+      "Bash(git checkout*)",
+      "Bash(git switch*)",
+      "Bash(git restore*)",
+      "Bash(git merge*)",
+      "Bash(git rebase*)",
+      "Bash(git remote*)",
+      "Bash(git config*)",
+      "Bash(git tag*)",
+      "Bash(git worktree*)",
+      "Bash(git blame*)",
+      "Bash(gh *)",
+      "Bash(uv *)",
+      "Bash(uvx *)",
+      "Bash(pip *)",
+      "Bash(pytest*)",
+      "Bash(ruff *)",
+      "Bash(mypy *)",
+      "Bash(black *)",
+      "Bash(poetry *)",
+      "Bash(npm *)",
+      "Bash(pnpm *)",
+      "Bash(yarn *)",
+      "Bash(bun *)",
+      "Bash(make *)",
+      "Bash(docker compose *)",
+      "Bash(docker ps*)",
+      "Bash(docker logs*)",
+      "Bash(mise *)",
+      "Bash(pgrep *)",
+      "Bash(pkill *)",
+      "Bash(/usr/bin/grep *)",
+      "Bash(/usr/bin/sed *)",
+      "Bash(/usr/bin/xargs *)",
+      "Bash(/usr/bin/find *)",
+      "Bash(/usr/bin/cat *)",
+      "Bash(/usr/bin/ls *)",
+      "Bash(/usr/bin/echo *)",
+      "Bash(/usr/bin/head *)",
+      "Bash(/usr/bin/tail *)",
+      "Bash(/usr/bin/wc *)",
+      "Bash(/usr/bin/pgrep *)",
+      "Bash(/usr/bin/pkill *)",
+      "mcp__playwright",
+      "mcp__codegraph__*"
+    ],
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(sudo rm -rf /)",
+      "Bash(rm -rf ~)",
+      "Bash(sudo rm -rf ~)",
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(.ssh/*)",
+      "Edit(.ssh/*)",
+      "Read(.credentials/*)",
+      "Edit(.credentials/*)",
+      "Read(Library/Keychains/*)",
+      "Edit(Library/Keychains/*)",
+      "Read(.aws/credentials)",
+      "Edit(.aws/credentials)",
+      "Read(.config/gh/hosts.yml)",
+      "Edit(.config/gh/hosts.yml)",
+      "Read(**/*.pem)",
+      "Edit(**/*.pem)",
+      "Read(**/*.key)",
+      "Edit(**/*.key)",
+      "Read(**/secrets/*)",
+      "Edit(**/secrets/*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "gentle-ai review stop-hook --agent claude-code",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "gentle-ai review stop-hook --agent claude-code",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "codegraph prompt-hook"
+          }
+        ]
+      }
+    ]
+  },
+  "workflowKeywordTriggerEnabled": false,
+  "enabledPlugins": {
+    "caveman@caveman": true,
+    "context7@claude-plugins-official": true,
+    "engram@engram": true,
+    "frontend-design@claude-plugins-official": true,
+    "ponytail@ponytail": true,
+    "pyright-lsp@claude-plugins-official": true,
+    "warp@claude-code-warp": true
+  },
+  "extraKnownMarketplaces": {
+    "caveman": {
+      "source": {
+        "source": "github",
+        "repo": "JuliusBrussee/caveman"
+      }
+    },
+    "claude-code-warp": {
+      "source": {
+        "source": "github",
+        "repo": "warpdotdev/claude-code-warp"
+      }
+    },
+    "engram": {
+      "source": {
+        "source": "github",
+        "repo": "Gentleman-Programming/engram"
+      }
+    },
+    "ponytail": {
+      "source": {
+        "source": "github",
+        "repo": "DietrichGebert/ponytail"
+      }
+    }
+  },
+  "outputStyle": "Gentleman",
+  "effortLevel": "xhigh",
+  "modelSettings": {
+    "claude-sonnet-5": {
+      "effortLevel": "medium"
+    }
+  },
+  "skipWorkflowUsageWarning": true,
+  "theme": "dark",
+  "remoteControlAtStartup": true,
+  "inputNeededNotifEnabled": true,
+  "agentPushNotifEnabled": true
 }
