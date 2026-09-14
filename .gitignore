@@ -4,3 +4,10 @@
 **/.env.*
 **/logs/
 **/backups/
+**/__pycache__/
+**/*.pyc
+# Local Pi runtime state
+.atl/
+
+# Local-only: real account/infra IDs, keep out of public repo
+claude/skills/cloudflare-api/SKILL.md
