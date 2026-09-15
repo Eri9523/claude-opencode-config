@@ -8,6 +8,7 @@
 - Preserve unrelated user changes. Touch only files required by the task.
 - Ask one focused question only when a real ambiguity blocks progress.
 - Code, comments, commit text, PRs, and technical docs use English. Match the user's language in chat. User-facing UI text follows the project's language.
+- Comments and docstrings stay concise: one line where one line does. Record what the code does not already say, never restate it. No rationale essays, no section banners.
 
 ## Execution
 

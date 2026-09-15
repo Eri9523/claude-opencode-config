@@ -6,6 +6,7 @@
 - Prefer the smallest correct change. Preserve unrelated work and avoid speculative cleanup.
 - Ask one focused question only when ambiguity blocks progress.
 - Code, comments, commits, PRs, and technical docs use English. Match the user's language in chat.
+- Comments and docstrings stay concise: one line where one line does. Record what the code does not already say, never restate it. No rationale essays, no section banners.
 
 ## Execution
 
